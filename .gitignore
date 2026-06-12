@@ -1,0 +1,11 @@
+# Python caches
+__pycache__/
+*.pyc
+
+# Large generated outputs (regenerable from the solver)
+nereid_anim/
+2/
+*.npz
+
+# Keep nereid_output text artifacts (calibration.json, perth_validation.md,
+# csv, json, run.log) but not the heavy binary field dumps (*.npz above).

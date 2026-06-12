@@ -1,0 +1,9 @@
+02:00:34  ======================================================================
+02:00:34  NEREID-B SELF-TEST
+02:00:40    [PASS] no NaN/Inf in fields  
+02:00:40    [PASS] salinity bounded [0, S0]  min=35.798 max=36.777 S0=65.0
+02:00:40    [PASS] divergence controlled  div=4.40e-05
+02:00:40    [PASS] EOS density increases with salinity  1024.62 -> 1032.41
+02:00:40    [PASS] TVD advection non-amplifying  max=1.000000 (monotone)
+02:00:41    [PASS] checkpoint/restart reproduces exactly  max|dS|=0.00e+00
+02:00:41  SELF-TEST: 6/6 checks passed.
