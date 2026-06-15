@@ -328,9 +328,11 @@ h("2.6 Synthesis and research gap", 2)
 para(
     "The literature provides a validated near field, capable but Boussinesq and "
     "deterministic far-field codes, and mature but unexploited stochastic and "
-    "thermodynamic methods. What is missing — and what this research provides — "
-    "is their integration into one validated, non-Boussinesq, uncertainty-aware "
-    "framework with a rigorously field-validated near-field/far-field coupling.")
+    "thermodynamic methods. What is missing — and what this research will "
+    "deliver — is their integration into one validated, non-Boussinesq, "
+    "uncertainty-aware framework: the near field is already lab-validated, while "
+    "rigorous field validation of the far-field coupling remains the core "
+    "outstanding objective.")
 
 h("2.7 Theoretical and conceptual framework", 2)
 para(
@@ -442,7 +444,17 @@ bullet("Near field validated: modelled 60° dense-jet rise z_t/(D·Fr) = 2.20 "
        "lies within the published band 2.1–2.8; return dilution follows "
        "S_r ≈ 1.6 Fr (Figure 4.1).")
 bullet("Far field grid-converged: peak excess salinity changes 0 % between the "
-       "medium and fine meshes (4.44 → 4.45 g kg⁻¹ over a 4× cell-count range).")
+       "medium and fine meshes (4.44 → 4.45 g kg⁻¹ over a 4× cell-count range), "
+       "with an independent lock-exchange benchmark giving a front Froude number "
+       "Fr_f ≈ 0.40, close to the textbook ~0.5.")
+bullet("Far field not yet field-validated: with the corrected buoyancy-modified "
+       "k–ε closure (stratification now correctly damps turbulence), the model "
+       "predicts ~35:1 dilution at 50 m for a Perth-class outfall — about 22 % "
+       "below the documented ~45:1 field value, i.e. it under-predicts dilution "
+       "and over-predicts impact, a conservative (safe) error. These far-field "
+       "numbers are indicative and conservative; quantitative far-field "
+       "validation is a remaining objective (WP3) requiring an in-class "
+       "multi-point CTD/ADCP transect.")
 bullet("Stochastic ensembles produce mean, spread and exceedance-probability "
        "maps of the salinity field.")
 para("An industrial case — a 150,000 m³/day SWRO outfall — was simulated for "

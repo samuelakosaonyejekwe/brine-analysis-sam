@@ -276,9 +276,12 @@ bullet("Non-Boussinesq buoyancy with a nonlinear equation of state, valid for "
        "the large brine/ambient density contrast.")
 bullet("Onsager (Soret/Dufour) cross-diffusion and a full anisotropic, "
        "state-dependent dispersion tensor.")
-bullet("A validated near-field/far-field coupling that combines the accuracy of "
-       "calibrated jet correlations with a grid-converged stochastic 3-D far "
-       "field — and the first field validation of such a coupled framework.")
+bullet("A near-field/far-field coupling that combines lab-validated calibrated "
+       "jet correlations with a grid-converged stochastic 3-D far field; the "
+       "first field validation of such a coupled framework is a proposed "
+       "contribution (the near field is lab-validated, while field validation "
+       "of the far field remains a core objective requiring in-class CTD/ADCP "
+       "survey data).")
 
 # ======================================================================
 #  6. METHODOLOGY
@@ -340,7 +343,16 @@ bullet("Near field validated: the modelled 60° dense-jet rise z_t/(D·Fr) = 2.2
        "return-point dilution following the established S_r ≈ 1.6 Fr scaling.")
 bullet("Far field shown grid-converged: peak excess salinity changes by 0 % "
        "between the medium and fine meshes (4.44 → 4.45 g kg⁻¹ across a 4× "
-       "cell-count range).")
+       "cell-count range), and an independent lock-exchange benchmark gives a "
+       "front Froude number Fr_f ≈ 0.40, near the textbook ~0.5.")
+bullet("Far field NOT yet field-validated: with the corrected buoyancy-modified "
+       "k–ε closure (stratification now correctly damps turbulence), the model "
+       "predicts ~35:1 dilution at 50 m for a Perth-class outfall, about 22 % "
+       "below the documented field value of ~45:1 — i.e. it under-predicts "
+       "dilution and so over-predicts impact, a conservative (safe) error. "
+       "These far-field numbers are indicative and conservative; quantitative "
+       "field validation is a remaining objective (WP3) requiring an in-class "
+       "multi-point CTD/ADCP transect.")
 bullet("Stochastic ensembles demonstrated, returning mean, spread and "
        "exceedance-probability maps of the salinity field.")
 para("A 150,000 m³/day SWRO outfall case was simulated in two diffuser "
