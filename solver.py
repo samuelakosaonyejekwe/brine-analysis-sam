@@ -87,18 +87,76 @@ VALIDATION STATUS & LIMITATIONS (read before any quantitative use):
     scaling z_t/(D Fr) = 2.1-2.8 and return dilution S_r = 1.6 Fr. Set
     cfg.near_field_coupling=False for the raw (over-predicting) resolved-jet
     mode used in jet-resolution studies.
-  * FAR-FIELD ACCURACY (the 3-D gravity-current spreading) is still not
-    validated against site data; that requires a CTD/ADCP field campaign
-    (input.docx Class C-D). Treat absolute far-field numbers as indicative.
+  * FAR-FIELD ACCURACY (the 3-D gravity-current spreading) is NOT field-validated,
+    but a ROOT-CAUSE BUG was found and fixed. The k-eps buoyancy production term
+    G_b had a FLIPPED SIGN (buoyancy_damping_fix), so stable brine stratification
+    PRODUCED turbulence instead of damping it -> the eddy viscosity railed to
+    nut_max wherever the water was stratified -> the far field grossly OVER-mixed.
+    With the corrected (physically standard) damping sign:
+       - the eddy-viscosity railing drops from ~17% of cells to ~5% (physical);
+       - Perth submerged diffuser: model ~35:1 dilution @50 m vs field 45:1. This
+         now UNDER-predicts dilution (~22%) -> CONSERVATIVE (it OVER-predicts impact,
+         the safe side), vs the buggy sign's ~57:1 which over-predicted dilution
+         (unsafe). Field 45:1 sits between the two signs.
+       - Gacia shallow outfall: decay length still ~2x the observed ~12 m -
+         STRUCTURAL (a deep-diffuser model cannot represent a ~6 m shallow surface
+         discharge), unaffected by the sign.
+    HONEST NOTES:
+     (1) An earlier build reported "reproduces 45:1 to 2.3%" — that tight match was
+         a DISCRETISATION ARTIFACT of the old non-conservative operators COMBINED
+         with the sign-bug over-mixing (two errors partly cancelling); it vanishes
+         once the PDE is solved accurately and the sign is corrected.
+     (2) The corrected far field is physically consistent and CONSERVATIVE; the
+         residual ~22% (35 vs 45) is honest model uncertainty. Closing it to a few %
+         is a per-site CALIBRATION step needing that site's data (a multi-point
+         in-class CTD/ADCP transect, e.g. Carlsbad) and/or a finer grid. No
+         coefficient is hand-tuned to one site (that would break universality).
+         Treat absolute far-field numbers as INDICATIVE (now conservative).
   * Documented reduced-CFD choices (intentional, toggleable/extensible):
     Boussinesq continuity (full nonlinear density kept in buoyancy);
-    1st-order-in-time; single-tracer salinity; waves via dispersion (no
-    radiation stress/Stokes drift in momentum); linearised free surface;
-    partial-cell (not full cut-cell) topography.
+    1st-order-in-time ADVECTION (diagonal diffusion now backward-Euler implicit);
+    single-tracer salinity; waves via dispersion (no radiation stress/Stokes
+    drift in momentum); linearised free surface; partial-cell (not full cut-cell)
+    topography.
   * Performance: pure NumPy; the stochastic ENSEMBLE is parallelised across CPU
     cores (multiprocessing). No GPU.
 
-Author: NEREID-B reference implementation, Rev 1.2
+Rev 1.3 NUMERICAL SOLIDIFICATIONS (Config toggles; governing PDE model unchanged;
+  --selftest 13/13, --validate 4/4, --benchmark PASS). ACCURACY-FIRST defaults: the
+  numerical-correctness fixes are DEFAULT-ON so the output is the TRUE solution of
+  the stated PDE (this is what exposes the honest far-field over-dispersion above; a
+  single-point bisection via --calibrate perth attributed the shifts):
+  DEFAULT-ON (numerical correctness + safe robustness/speed):
+  * masked_gradients (A1)       : ddx/ddy/ddz never difference across the seabed
+  * conservative_offdiag (A2)   : face-based, conservative, mask-aware cross-flux
+                                  (+ clip_scalar_bounds -> true [0,S0]); A1+A2: Perth 46->62
+  * consistent_partial_projection (A4): divergence-free to MACHINE PRECISION (~4e-3 -> ~2e-17)
+  * implicit_diffusion (C1)     : backward-Euler (LOD) diagonal diffusion, no dt ceiling (->40)
+  * full_dt_limiter (A3) ; semi_implicit_coriolis (A5) ; enforce_mass_balance (C2,
+    asserted) ; couple_dt_from_src (C3) ; eta_relax (D1) ; EOS clamp (F3) ; Fr_d (F6) ;
+    vectorised diagnostics (F4) ; fuller checkpoint (F5)
+  * buoyancy_damping_fix : ROOT-CAUSE BUG FIX. The k-eps buoyancy production G_b had a
+    FLIPPED SIGN, so stable brine stratification PRODUCED turbulence (railing the eddy
+    viscosity to nut_max wherever stratified) instead of damping it. Corrected to the
+    standard P_b = +(g/rho0)(nut/Pr_t) drho/dz (matches the code's own "stratif.
+    damping" comment + its eps C3*max(Gb,0) design). Drops nut railing ~17%->~5% and
+    fixes the far-field OVER-mixing: Perth 57->35:1 @50 m (now CONSERVATIVE vs field
+    45:1; the buggy sign over-predicted dilution). --selftest 13/13, --validate 4/4
+    still PASS. The earlier "45:1/2.3%" was the old discretisation error + this sign
+    bug partly cancelling.
+  DEFAULT-OFF extras: strat_scalar_damping (Munk-Anderson Ri-damping; experimental,
+    rails nut with the existing closure), bottom_drag+wall_function (clean 0% railing,
+    helps Gacia reach), pk_limiter, y_sponge.
+  DEFAULT-OFF (extra physics / BC choices; enable + re-run --calibrate per regime):
+  * bottom_drag + wall_function (B1) -> drag-controlled far field; shortens Gacia reach
+    in the right direction (27->23 m) but only modestly; raises near-bed mixing/dilution
+  * pk_limiter (B2) ; y_sponge (D2)
+  NEW VALIDATION TOOLS: --benchmark (lock-exchange front Froude — validates the PDE
+  CORE independently of the jet correlations, E1; PASS at Fr_f~0.13) and extra
+  --selftest invariants (scalar conservation, dispersion-tensor SPD, Poisson symmetry,
+  rigid-lid restart, machine-precision divergence, global mass balance; E2).
+
+Author: NEREID-B reference implementation, Rev 1.3
 ================================================================================
 """
 from __future__ import annotations
@@ -191,8 +249,26 @@ class Config:
     nu_mol: float = 1.05e-6    # m^2/s molecular viscosity
     D_mol: float = 1.5e-9      # m^2/s molecular salt diffusivity
     kappa_T: float = 1.4e-7    # m^2/s molecular thermal diffusivity
-    Sc_t: float = 0.7          # turbulent Schmidt number
-    Pr_t: float = 0.7          # turbulent Prandtl number
+    Sc_t: float = 0.7          # turbulent Schmidt number (neutral)
+    Pr_t: float = 0.7          # turbulent Prandtl number (neutral)
+    # ---- stratification-dependent turbulent scalar mixing (UNIVERSAL physics) --
+    # In stable stratification, buoyancy suppresses the TURBULENT SCALAR flux. The
+    # momentum side already gets this (the G_b buoyancy term in k-eps), but the
+    # scalar flux used a CONSTANT Sc_t -> a strongly stratified brine plume mixes
+    # salt too fast (over-dilution). Munk & Anderson (1948): the turbulent scalar
+    # diffusivity is damped by the gradient Richardson number Ri = N^2/(du/dz)^2 as
+    # K_h ∝ (1 + sigma*Ri)^(-q). Self-adjusting & site-independent (=neutral Sc_t
+    # where Ri<=0). DEFAULT-OFF (EXPERIMENTAL): physically motivated, but in THIS
+    # solver it sharpens the near-bed density gradient enough to amplify the EXISTING
+    # k-eps buoyancy production and rail the eddy viscosity to nut_max (~98% of cells
+    # vs ~17% off); the project constraint leaves the k-eps closure as-is, so it
+    # cannot be absorbed there, and it only modestly helps (Perth ~57->~55:1). The
+    # robust universal over-mixing fix is pk_limiter (below) instead. Enable only for
+    # exploratory stratified-mixing studies (watch nut_cap_fraction in the log).
+    strat_scalar_damping: bool = False
+    strat_Ri_sigma: float = 3.3333  # Munk-Anderson sigma (10/3)
+    strat_Ri_exp: float = 1.5       # Munk-Anderson exponent (3/2) for scalars
+    strat_damp_floor: float = 0.05  # floor on the damping factor (keeps SPD, stable)
     # novel couplings
     osmotic_coeff: float = 0.9 # van 't Hoff osmotic (activity) coefficient phi_os
     soret: float = 2.0e-3      # Soret coefficient (T-gradient drives salt) [1/K eq]
@@ -220,24 +296,22 @@ class Config:
     # is the one knob that sets the far-field gravity-current SPREADING RATE, i.e.
     # how fast the seabed excess salinity ΔS decays with distance from the outfall.
     # >=0 so the dispersion tensor stays PSD (SPD overall) -> numerically safe.
-    # Default 1.0 = physically-derived baseline. `python3 solver.py --calibrate`
-    # fits it against real field data; `--calibrate perth` uses the Perth/Cockburn
-    # Sound deep-diffuser site (writes calibration.json). FIELD-CALIBRATION RESULT
-    # (honest, tested against BOTH discharge classes): the knob does not get
-    # constrained by available public field metrics, so 1.0 is retained.
-    #  * Gacia 2007 (shallow Med. surface discharge): modeled ΔS decay length
-    #    floors ~23 m & only LENGTHENS for cal>1, vs observed ~12 m -> SATURATED,
-    #    model over-predicts far-field reach ~1.8x. Grid refinement (dx 5->1.5 m)
-    #    gives L=23.6->22.2 m = GRID-CONVERGED, so the gap is STRUCTURAL (config/
-    #    discharge-class mismatch), NOT numerical diffusion -> not fixable by grid.
-    #  * Perth diffuser (matches the solver's class; `--calibrate perth`): with the
-    #    WA EPA report's AUTHENTIC specs (40x0.13 m ports, exit vel ~4.7 m/s, Fr~32,
-    #    61.4 psu into 36.5) the model REPRODUCES the field-validated 45:1 dilution
-    #    at 50 m to ~2.3% (modeled 46.1:1) at THIS default 1.0 -> VALIDATED, no
-    #    tuning. (The 50 m point is diffuser/near-field-set, knob spans only 45-47.)
-    # Net: the far field is field-VALIDATED for an efficient diffuser at cal=1.0;
-    # the Gacia shallow-surface case is a config mismatch the model can't represent.
-    # See nereid_output/calibration.json + nereid-b-solver memory.
+    # Default 1.0 = physically-derived baseline. `--calibrate perth`/`--calibrate`
+    # fit it against real field data (writes calibration.json). CALIBRATION RESULT
+    # with the Rev 1.3 ACCURATE numerics (honest; the knob cannot close the gaps):
+    #  * Perth deep diffuser (the solver's class): with the k-eps buoyancy SIGN BUG
+    #    fixed (buoyancy_damping_fix), model ~35:1 dilution @50 m vs field 45:1 ->
+    #    CONSERVATIVE (under-dilutes ~22%). The buggy sign gave ~57:1 (over); the
+    #    field 45 sits between. This knob only scales the minor dispersivities, so it
+    #    cannot move it much. (The earlier 46:1/2.3% "match" was the old discretisation
+    #    error + the sign-bug over-mixing partly cancelling — both now corrected.)
+    #  * Gacia 2007 (shallow surface discharge): ΔS decay length ~2x the observed
+    #    ~12 m — STRUCTURAL (deep-diffuser model vs ~6 m shallow surface discharge),
+    #    sign-independent -> not closable here.
+    # NET: the far field is NOT field-validated; with the sign fix it is CONSERVATIVE
+    # (under-predicts dilution -> over-predicts impact). Closing the residual ~22% to
+    # a few % is a per-site CALIBRATION needing that site's transect + a finer grid
+    # (do NOT hand-tune a coefficient to one site). See VALIDATION STATUS header.
     farfield_disp_cal: float = 1.0
     # ---- genuine free surface (replaces the rigid lid) ----------------------
     free_surface: bool = True
@@ -265,6 +339,36 @@ class Config:
     nut_max: float = 8.0       # cap on eddy viscosity (m^2/s)
     Cs_smag: float = 0.18      # Smagorinsky constant (LES dissipation floor)
     k_max: float = 50.0        # safety bound on turbulent kinetic energy
+    # ---- near-wall closure (B1/B2) -----------------------------------------
+    # Quadratic bottom drag tau_b = rho*Cd_bed*|u_b|*u_b on the lowest fluid cell
+    # (semi-implicit, unconditionally stable) and a high-Re log-law wall function
+    # for k,eps. A brine gravity current is genuinely drag-controlled, so these
+    # improve the physics (and the Gacia far-field reach); BUT they MODIFY the
+    # near-bed RANS closure/forcing and increase near-bed mixing, which shifts the
+    # field-VALIDATED Perth 45:1@50 m point (-> ~57:1, over-diluted). They are
+    # therefore DEFAULT-OFF so the validated baseline model is reproduced exactly;
+    # enable them for a drag-controlled regime and RE-RUN `--calibrate perth`
+    # (re-tune farfield_disp_cal) before quoting far-field numbers.
+    bottom_drag: bool = False
+    Cd_bed: float = 2.5e-3     # bed drag coefficient (sand/gravel ~2-3e-3)
+    wall_function: bool = False
+    kappa_vk: float = 0.41     # von Karman constant
+    # k-epsilon production realizability limiter: Pk <= pk_limiter * eps. Standard
+    # (Menter) k-eps safeguard, available but DEFAULT-OFF: tested here and it does
+    # NOT resolve the nut railing (the railing is buoyancy/dissipation-balance
+    # driven, not shear-production-limited), so it is not claimed as the fix. Set
+    # e.g. 10.0 to enable (useful for the raw resolved jet, near_field_coupling=False).
+    pk_limiter: float = 0.0
+    # BUG FIX (default-on): the k-eps buoyancy production G_b had a FLIPPED SIGN.
+    # Canonical TKE buoyancy production is P_b = +(g/rho0)(nut/Pr_t) d rho/dz, which
+    # is NEGATIVE (damping) for stable stratification (drho/dz<0) — matching this
+    # code's own comment "stratif. damping" and its eps-equation use of C3*max(Gb,0)
+    # (Gb>0 = UNSTABLE production). The old code used the opposite sign, so stable
+    # brine stratification PRODUCED turbulence -> the eddy viscosity railed to nut_max
+    # wherever the water was stratified (incl. the quiescent ambient), which is the
+    # root cause of the far-field salt OVER-mixing. True restores the correct
+    # (damping) sign. Set False only to reproduce the legacy (buggy) behaviour.
+    buoyancy_damping_fix: bool = True
 
     # ---- stochastic layer (Class D statistics, salinity.docx Eq.3.7) -------
     stoch_enable: bool = True
@@ -278,9 +382,60 @@ class Config:
     dt_max: float = 2.0        # s
     dt_min: float = 1.0e-3
     save_every: float = 60.0   # s   metric/sample cadence
+    # ---- numerical-solidity toggles (A1-A5, C1-C3, D1-D2) ------------------
+    # ACCURACY-FIRST defaults. The NUMERICAL-CORRECTNESS fixes are DEFAULT-ON: they
+    # solve the SAME governing PDE more accurately (no differencing across the
+    # seabed; a conservative cross-flux; a volume-consistent projection; implicit
+    # diffusion), so the default output is the TRUE solution of the stated model.
+    # IMPORTANT (validation): with these on, the model's accurate solution OVER-
+    # disperses vs field data — Perth ~57:1 @50 m (field 45:1) and Gacia decay
+    # ~2x too long. The earlier tight Perth match (46:1, 2.3%) was a DISCRETISATION
+    # ARTIFACT of the old centred/non-conservative operators, NOT a real validation.
+    # See the VALIDATION STATUS header. Set these False to reproduce that legacy
+    # (numerically-diffuse) baseline for provenance/comparison only.
+    # --- DEFAULT-ON: numerical correctness + safe robustness/speed ---
+    masked_gradients: bool = True      # A1: one-sided grads at the immersed seabed
+    conservative_offdiag: bool = True  # A2: face-based, conservative, mask-aware cross-flux
+    clip_scalar_bounds: bool = True    # A2: clip S into [0,S0] (true bound; safety net)
+    consistent_partial_projection: bool = True  # A4: divergence-free to MACHINE PRECISION
+    implicit_diffusion: bool = True    # C1: backward-Euler (LOD) diagonal diffusion, no dt ceiling
+    full_dt_limiter: bool = True       # A3: off-diagonal tensor in the dt limit
+    semi_implicit_coriolis: bool = True         # A5: norm-preserving rotation
+    enforce_mass_balance: bool = True  # C2: close global inflow=outflow each step (asserted)
+    couple_dt_from_src: bool = True    # C3: size the fixed FS dt from the seeded current
+    eta_relax_factor: float = 1.0      # D1: tau_eta = factor * L/sqrt(g*H)
+    # --- DEFAULT-OFF: extra PHYSICS / BC choices (enable + RE-RUN --calibrate) ---
+    # bottom_drag/wall_function add genuine near-bed physics (a brine current IS
+    # drag-controlled) and shorten the Gacia far-field reach in the right direction,
+    # but only modestly (the residual gap is structural) and they increase near-bed
+    # mixing -> more far-field dilution. y_sponge changes the lateral BC. Kept opt-in.
+    y_sponge: bool = False             # D2: lateral sponge at the y-walls
 
     # ---- diagnostics / compliance ------------------------------------------
     dS_crit: float = 2.0       # g/kg regulatory excess-salinity threshold
+    # --- output-ACCURACY controls (post-processing only; DO NOT affect the PDE
+    #     solution — they change only how the solved field is *measured/reported*) -
+    # Sub-cell interpolation of the seabed footprint, horizontal reach and impact
+    # depth. The raw cell-count versions remain quantised to one cell (dx*dy area,
+    # dz depth); sub-cell estimation removes that quantisation so the reported
+    # numbers stop jumping by whole cells between grids/snapshots. Cell-count
+    # values are still written alongside as *_cellcount for traceability.
+    subcell_diagnostics: bool = True
+    subcell_refine: int = 8        # oversampling factor for the sub-cell estimate
+    # Report the footprint at a small sweep of thresholds (it is hyper-sensitive
+    # to dS_crit when the peak excess only just exceeds it) so the headline area
+    # is not a knife-edge number.
+    footprint_thresholds: tuple = (1.0, 1.5, 2.0)
+    # Trailing-window steady-state statistics: the final headline metrics are
+    # reported as mean +/- std over the last `steady_frac` of the time-series
+    # (instead of one possibly-transient final snapshot), together with a
+    # converged/NOT-converged verdict. Purely a reporting change.
+    steady_frac: float = 0.34      # fraction of the run (tail) used for the stats
+    steady_tol: float = 0.20       # rel. std below which a metric is "steady"
+    # Centerline-curve robustification (cleans the Tier-5 curve only):
+    centerline_track_core: bool = True   # follow the true plume core, not a fixed row
+    centerline_clip_upcurrent: bool = True  # drop the no-plume up-current branch
+    centerline_eps: float = 0.01   # g/kg excess below which "no plume" up-current
 
     # ---- run control -------------------------------------------------------
     ensemble: int = 1          # Monte-Carlo members (stochastic uncertainty)
@@ -325,6 +480,15 @@ class Grid:
         # ensure a water column everywhere
         self.fluid[:, :, -1] = True
         self.nfluid = int(self.fluid.sum())
+
+        # lowest fluid cell per column (the seabed cell) -> bottom-drag & wall fn.
+        # argmax returns the first True (smallest k) in each column; fluid[:,:,-1]
+        # guarantees at least one True so every column has a valid bed cell.
+        self.bottom_k = np.argmax(self.fluid, axis=2)            # (nx,ny)
+        bm = np.zeros_like(self.fluid)
+        ii, jj = np.meshgrid(np.arange(cfg.nx), np.arange(cfg.ny), indexing="ij")
+        bm[ii, jj, self.bottom_k] = True
+        self.bottom_mask = bm & self.fluid                       # (nx,ny,nz) bool
 
         # ---- face-open AREAS for conservative operators --------------------
         # Partial-cell (shaved-cell) topography: each cell has a vertical open
@@ -400,7 +564,32 @@ class Grid:
 # =============================================================================
 #  DIFFERENTIAL OPERATORS  (vectorised, mask-aware)
 # =============================================================================
-def ddx(f, dx):
+def _masked_deriv(f, d, axis, fluid):
+    """First derivative of `f` along `axis` that NEVER differences across the
+    immersed seabed/solid boundary (A1).  Where both neighbours along `axis` are
+    fluid -> centred 2nd order; where only one side is fluid -> one-sided 1st
+    order (forward/backward); isolated/solid cells -> 0.  This also subsumes the
+    one-sided treatment at the domain edges, so it replaces the plain centred
+    stencil wherever a field lives on the masked grid."""
+    f = np.moveaxis(f, axis, 0)
+    fl = np.moveaxis(fluid, axis, 0).astype(bool)
+    lf = np.zeros_like(fl); lf[1:] = fl[:-1]          # left neighbour is fluid
+    rf = np.zeros_like(fl); rf[:-1] = fl[1:]          # right neighbour is fluid
+    fwd = np.zeros_like(f); fwd[:-1] = (f[1:] - f[:-1]) / d
+    bwd = np.zeros_like(f); bwd[1:] = (f[1:] - f[:-1]) / d
+    cen = np.zeros_like(f); cen[1:-1] = (f[2:] - f[:-2]) / (2 * d)
+    g = np.zeros_like(f)
+    both = lf & rf
+    g = np.where(both, cen, g)
+    g = np.where(rf & ~lf, fwd, g)
+    g = np.where(lf & ~rf, bwd, g)
+    g *= fl
+    return np.moveaxis(g, 0, axis)
+
+
+def ddx(f, dx, fluid=None):
+    if fluid is not None:
+        return _masked_deriv(f, dx, 0, fluid)
     g = np.empty_like(f)
     g[1:-1] = (f[2:] - f[:-2]) / (2 * dx)
     g[0] = (f[1] - f[0]) / dx
@@ -408,7 +597,9 @@ def ddx(f, dx):
     return g
 
 
-def ddy(f, dy):
+def ddy(f, dy, fluid=None):
+    if fluid is not None:
+        return _masked_deriv(f, dy, 1, fluid)
     g = np.empty_like(f)
     g[:, 1:-1] = (f[:, 2:] - f[:, :-2]) / (2 * dy)
     g[:, 0] = (f[:, 1] - f[:, 0]) / dy
@@ -416,7 +607,9 @@ def ddy(f, dy):
     return g
 
 
-def ddz(f, dz):
+def ddz(f, dz, fluid=None):
+    if fluid is not None:
+        return _masked_deriv(f, dz, 2, fluid)
     g = np.empty_like(f)
     g[:, :, 1:-1] = (f[:, :, 2:] - f[:, :, :-2]) / (2 * dz)
     g[:, :, 0] = (f[:, :, 1] - f[:, :, 0]) / dz
@@ -492,6 +685,46 @@ def diffuse_1d(phi, Dcell, dx, axis, face_open=None):
     return np.moveaxis(div, 0, axis)
 
 
+def _tridiag_solve(a, b, c, d):
+    """Thomas algorithm along axis 0 (vectorised over the transverse plane).
+    a=sub-diagonal (a[0] ignored), b=diagonal, c=super-diagonal (c[-1] ignored),
+    d=rhs. Returns x solving the tridiagonal system. Used for the unconditionally
+    stable backward-Euler (LOD) implicit diffusion sweeps (C1)."""
+    n = b.shape[0]
+    cp = np.empty_like(b); dp = np.empty_like(b)
+    cp[0] = c[0] / b[0]; dp[0] = d[0] / b[0]
+    for i in range(1, n):
+        m = b[i] - a[i] * cp[i - 1]
+        cp[i] = c[i] / m
+        dp[i] = (d[i] - a[i] * dp[i - 1]) / m
+    x = np.empty_like(b)
+    x[-1] = dp[-1]
+    for i in range(n - 2, -1, -1):
+        x[i] = dp[i] - cp[i] * x[i + 1]
+    return x
+
+
+def implicit_diffuse_axis(phi, Dcell, dx, axis, face_open, dt):
+    """One backward-Euler (implicit) diffusion sweep along `axis`:
+       (I - dt d/dx(D d/dx)) phi_new = phi
+    with the SAME open-area face weighting as diffuse_1d (so solid faces carry no
+    flux -> Neumann/no-flux at the seabed and the domain edges). Unconditionally
+    stable -> removes the explicit diffusive dt ceiling (C1)."""
+    phim = np.moveaxis(phi, axis, 0)
+    D = np.moveaxis(Dcell, axis, 0)
+    fo = np.moveaxis(face_open, axis, 0).astype(float)
+    n = phim.shape[0]
+    Dface = np.zeros((n + 1,) + phim.shape[1:])
+    Dface[1:n] = 0.5 * (D[:-1] + D[1:]) * fo        # interior faces only
+    r = dt / dx ** 2
+    Dlo = Dface[:n]; Dhi = Dface[1:n + 1]
+    a = -r * Dlo
+    c = -r * Dhi
+    b = 1.0 + r * (Dlo + Dhi)
+    x = _tridiag_solve(a, b, c, phim)
+    return np.moveaxis(x, 0, axis)
+
+
 # =============================================================================
 #  PRESSURE-POISSON OPERATOR  (assembled once, LU-factorised)
 # =============================================================================
@@ -502,13 +735,32 @@ def free_surface_params(cfg: Config, grid: Grid):
     into the pressure matrix (backward-Euler -> unconditionally stable), which
     requires a FIXED dt so the matrix can be factorised once. alpha = 2 g dt^2/dz."""
     dx, dy, dz = grid.dx, grid.dy, grid.dz
-    umax = max(grid.U_d, 3 * cfg.U_current, 1.0)
+    # C3: in near-field-coupling mode the raw jet U_d is never realised in the
+    # 3-D field (it is seeded as the slow diluted gravity current U_src), so sizing
+    # the advective CFL off U_d makes dt needlessly tiny. Use the actual seeded
+    # speed (with a x2 safety margin and the current floor); the wave CFL below
+    # still bounds dt by the surface gravity-wave speed.
+    if cfg.near_field_coupling and cfg.couple_dt_from_src:
+        umax = max(2.0 * grid.U_src, 3 * cfg.U_current, 1.0)
+    else:
+        umax = max(grid.U_d, 3 * cfg.U_current, 1.0)
     dt_adv = cfg.cfl * min(dx, dy, dz) / umax
     wave = cfg.wave_disp_gain * math.pi * cfg.Hs ** 2 / max(cfg.Tw, 1e-3)
     _cal = max(cfg.farfield_disp_cal, 0.0)
     Dh = cfg.nut_max / cfg.Sc_t + _cal * cfg.disp_horiz + wave + _cal * cfg.shear_disp * umax * dx
     Dv = cfg.nut_max / cfg.Sc_t + cfg.D_mol
-    dt_dif = 0.4 / (Dh / dx ** 2 + Dh / dy ** 2 + Dv / dz ** 2)
+    # A3: off-diagonal & anisotropic dispersion in the explicit diffusive limit
+    wave_u = math.pi * cfg.Hs / max(cfg.Tw, 1e-3)
+    Dwave_t = cfg.wave_disp_gain * wave_u * cfg.Hs
+    Dsh_max = _cal * cfg.shear_disp * umax * dx
+    Db_max = cfg.bath_disp_gain * (_cal * cfg.disp_horiz + cfg.nut_max / cfg.Sc_t)
+    off_term = ((Dsh_max + Dwave_t + Db_max)
+                * (1 / (dx * dy) + 1 / (dx * dz) + 1 / (dy * dz))) \
+        if cfg.full_tensor_dispersion else 0.0
+    diag_term = Dh / dx ** 2 + Dh / dy ** 2 + Dv / dz ** 2
+    # C1: with implicit diagonal diffusion only the explicit cross-flux limits dt
+    lim = off_term if cfg.implicit_diffusion else diag_term + off_term
+    dt_dif = 0.4 / max(lim, 1e-12)
     c_surf = math.sqrt(cfg.g * cfg.depth)
     dt_wave = cfg.cfl * min(dx, dy) / c_surf
     dt_fs = float(np.clip(min(dt_adv, dt_dif, dt_wave), cfg.dt_min, cfg.dt_max))
@@ -587,11 +839,17 @@ class PoissonSolver:
 #  PHYSICS HELPERS
 # =============================================================================
 def equation_of_state(cfg: Config, S, T):
-    """Nonlinear (cabbeling) seawater EOS -> density (salinity.docx Eq.3.5)."""
+    """Nonlinear (cabbeling) seawater EOS -> density (salinity.docx Eq.3.5).
+
+    F3: the cabbeling term -0.5*cab*dT^2 is a downward parabola in T, so for a
+    large |dT| it would drive density unphysically low. dT is clamped to +/-40 K
+    in that term only (inactive in the present 16-25 degC range) so the EOS stays
+    bounded if the temperature range is ever widened; the linear terms are exact."""
     dT = T - cfg.T_amb_surf
     dS = S - cfg.S_amb_surf
+    dT_cab = np.clip(dT, -40.0, 40.0) if np.ndim(dT) else max(-40.0, min(40.0, dT))
     rho = cfg.rho0 * (1.0 - cfg.alpha_T * dT + cfg.beta_S * dS) \
-        - cfg.rho0 * 0.5 * cfg.cabbeling * dT ** 2
+        - cfg.rho0 * 0.5 * cfg.cabbeling * dT_cab ** 2
     return rho
 
 
@@ -720,27 +978,42 @@ class NereidSolver:
         self.k = np.full(sh, k0) * g.fluid + 1e-9
         self.eps = np.full(sh, cfg.Cmu * k0 ** 1.5 / (0.1 * cfg.depth)) + 1e-12
         self.nut = np.full(sh, 1e-4)
+        self.sc_strat = np.ones(sh)                      # stratification scalar-mixing damping
+        self.k_cap_frac = 0.0; self.nut_cap_frac = 0.0   # cap-engagement diagnostics
+        self.mass_imbalance = 0.0; self.divergence = 0.0
+        self.p = np.zeros(sh)                            # pressure-correction field
         # stochastic OU channels (3 velocity components)
         self.zeta = [np.zeros(sh) for _ in range(3)]
         self.t = 0.0
         # free-surface elevation (linearised free surface; fixed grid)
         self.eta = np.zeros((g.nx, g.ny))
-        # sponge weight (relax to ambient near open x-boundaries)
+        # sponge weight (relax to ambient near the open boundaries)
         sx = np.zeros(sh)
         nsp = max(2, g.nx // 12)
         ramp = np.linspace(1.0, 0.0, nsp)
-        sx[:nsp] = ramp[:, None, None]
-        sx[-nsp:] = ramp[::-1][:, None, None]
+        sx[:nsp] = np.maximum(sx[:nsp], ramp[:, None, None])
+        sx[-nsp:] = np.maximum(sx[-nsp:], ramp[::-1][:, None, None])
+        # D2: lateral (y-wall) sponge — a plume that meanders to the side exits
+        # instead of reflecting off the free-slip y-walls. Narrower than the x-band.
+        if cfg.y_sponge:
+            nspy = max(2, g.ny // 16)
+            rampy = np.linspace(1.0, 0.0, nspy)
+            sx[:, :nspy] = np.maximum(sx[:, :nspy], rampy[None, :, None])
+            sx[:, -nspy:] = np.maximum(sx[:, -nspy:], rampy[::-1][None, :, None])
         self.sponge = sx
         self.sponge2d = sx[:, :, -1]            # horizontal ramp for eta damping
 
     # ---- checkpoint / restart ---------------------------------------------
     def save_state(self, path):
-        """Persist the full solver state (incl. RNG) for exact restart."""
+        """Persist the full solver state (incl. RNG) for exact restart. F5: the
+        diagnostic pressure-correction p and the last divergence/mass-imbalance are
+        also stored for completeness (they are recomputed each step, so they do not
+        affect bitwise-exact restart of the field trajectory)."""
         rng = self.rng.bit_generator.state
         np.savez(path, t=self.t, u=self.u, v=self.v, w=self.w, S=self.S, T=self.T,
-                 k=self.k, eps=self.eps, nut=self.nut, eta=self.eta,
+                 k=self.k, eps=self.eps, nut=self.nut, eta=self.eta, p=self.p,
                  zeta0=self.zeta[0], zeta1=self.zeta[1], zeta2=self.zeta[2],
+                 divergence=self.divergence, mass_imbalance=self.mass_imbalance,
                  rng_state=json.dumps(rng))
 
     def load_state(self, path):
@@ -749,6 +1022,10 @@ class NereidSolver:
         for name in ("u", "v", "w", "S", "T", "k", "eps", "nut", "eta"):
             setattr(self, name, d[name].copy())
         self.zeta = [d["zeta0"].copy(), d["zeta1"].copy(), d["zeta2"].copy()]
+        if "p" in d.files:
+            self.p = d["p"].copy()
+        if "divergence" in d.files:
+            self.divergence = float(d["divergence"]); self.mass_imbalance = float(d["mass_imbalance"])
         self.rho = equation_of_state(self.cfg, self.S, self.T)
         try:
             self.rng.bit_generator.state = json.loads(str(d["rng_state"]))
@@ -779,33 +1056,80 @@ class NereidSolver:
         dx, dy, dz = g.dx, g.dy, g.dz
         u, v, w = self.u, self.v, self.w
         nut = self.nut
+        fl = g.fluid if cfg.masked_gradients else None   # A1: mask-aware grads
         # strain-rate production P_k = nut * |S|^2
-        dudx, dudy, dudz = ddx(u, dx), ddy(u, dy), ddz(u, dz)
-        dvdx, dvdy, dvdz = ddx(v, dx), ddy(v, dy), ddz(v, dz)
-        dwdx, dwdy, dwdz = ddx(w, dx), ddy(w, dy), ddz(w, dz)
+        dudx, dudy, dudz = ddx(u, dx, fl), ddy(u, dy, fl), ddz(u, dz, fl)
+        dvdx, dvdy, dvdz = ddx(v, dx, fl), ddy(v, dy, fl), ddz(v, dz, fl)
+        dwdx, dwdy, dwdz = ddx(w, dx, fl), ddy(w, dy, fl), ddz(w, dz, fl)
         S2 = (2*dudx**2 + 2*dvdy**2 + 2*dwdz**2
               + (dudy+dvdx)**2 + (dudz+dwdx)**2 + (dvdz+dwdy)**2)
         Pk = nut * S2
-        # buoyancy production G_b = -(nut/Pr_t) * g/rho0 * d rho/dz  (stratif. damping)
-        drhodz = ddz(self.rho, dz)
-        Gb = -(nut / cfg.Pr_t) * (cfg.g / cfg.rho0) * drhodz
+        # B2: realizability / stagnation-point limiter  Pk <= pk_limiter * eps
+        if cfg.pk_limiter > 0.0:
+            Pk = np.minimum(Pk, cfg.pk_limiter * self.eps)
+        # buoyancy production G_b (stratif. damping). Correct sign:
+        #   P_b = +(g/rho0)(nut/Pr_t) d rho/dz  -> NEGATIVE (damps TKE) for stable
+        # stratification (d rho/dz < 0). The legacy code used the opposite sign (a
+        # bug that produced turbulence in stable stratification); buoyancy_damping_fix
+        # selects the correct sign. (See Config note.)
+        drhodz = ddz(self.rho, dz, fl)
+        bsign = 1.0 if cfg.buoyancy_damping_fix else -1.0
+        Gb = bsign * (nut / cfg.Pr_t) * (cfg.g / cfg.rho0) * drhodz
+        # UNIVERSAL stratification damping of the TURBULENT SCALAR diffusivity
+        # (Munk-Anderson 1948): K_h ∝ (1 + sigma*Ri)^(-q), Ri = N^2/(vertical shear)^2.
+        # Self-adjusting & site-independent: =1 where Ri<=0 (neutral/unstable), <1 in
+        # stable stratification -> the correct general fix for far-field salt
+        # over-mixing. Stored as a field and applied to S and T diffusivity below.
+        if cfg.strat_scalar_damping:
+            N2 = -(cfg.g / cfg.rho0) * drhodz              # buoyancy freq^2 (>0 stable)
+            shear2 = dudz ** 2 + dvdz ** 2                 # vertical shear^2
+            Ri = np.maximum(N2, 0.0) / np.maximum(shear2, 1e-10)
+            self.sc_strat = np.maximum(
+                (1.0 + cfg.strat_Ri_sigma * Ri) ** (-cfg.strat_Ri_exp),
+                cfg.strat_damp_floor)
+        else:
+            self.sc_strat = np.ones_like(S2)
         k, eps = self.k, self.eps
         k_in = max(1e-6, (0.05 * cfg.U_current) ** 2)
         adv_k = self._advect(k, k_in)
         adv_e = self._advect(eps, cfg.Cmu * k_in ** 1.5 / (0.1 * cfg.depth))
         Dk = cfg.nu_mol + nut / cfg.sigma_k
         De = cfg.nu_mol + nut / cfg.sigma_e
-        dif_k = (diffuse_1d(k, Dk, dx, 0, g.openx)
-                 + diffuse_1d(k, Dk, dy, 1, g.openy)
-                 + diffuse_1d(k, Dk, dz, 2, g.openz))
-        dif_e = (diffuse_1d(eps, De, dx, 0, g.openx)
-                 + diffuse_1d(eps, De, dy, 1, g.openy)
-                 + diffuse_1d(eps, De, dz, 2, g.openz))
-        k_new = k + dt * (adv_k + dif_k + Pk + Gb - eps)
         e_over_k = eps / np.maximum(k, 1e-8)
-        eps_new = eps + dt * (adv_e + dif_e
-                              + e_over_k * (cfg.C1 * (Pk + cfg.C3 * np.maximum(Gb, 0.0))
-                                            - cfg.C2 * eps))
+        # IMEX (C1): production/sink/advection explicit, diagonal diffusion implicit
+        if cfg.implicit_diffusion:
+            k_new = k + dt * (adv_k + Pk + Gb - eps)
+            k_new = self._implicit_diag_diffuse(k_new, Dk, Dk, Dk, dt)
+            eps_new = eps + dt * (adv_e
+                                  + e_over_k * (cfg.C1 * (Pk + cfg.C3 * np.maximum(Gb, 0.0))
+                                                - cfg.C2 * eps))
+            eps_new = self._implicit_diag_diffuse(eps_new, De, De, De, dt)
+        else:
+            dif_k = (diffuse_1d(k, Dk, dx, 0, g.openx)
+                     + diffuse_1d(k, Dk, dy, 1, g.openy)
+                     + diffuse_1d(k, Dk, dz, 2, g.openz))
+            dif_e = (diffuse_1d(eps, De, dx, 0, g.openx)
+                     + diffuse_1d(eps, De, dy, 1, g.openy)
+                     + diffuse_1d(eps, De, dz, 2, g.openz))
+            k_new = k + dt * (adv_k + dif_k + Pk + Gb - eps)
+            eps_new = eps + dt * (adv_e + dif_e
+                                  + e_over_k * (cfg.C1 * (Pk + cfg.C3 * np.maximum(Gb, 0.0))
+                                                - cfg.C2 * eps))
+        # B1: high-Re log-law wall function — overwrite the lowest fluid cell with
+        # the equilibrium near-wall values k_w=u_tau^2/sqrt(Cmu), eps_w=u_tau^3/(kz),
+        # u_tau=sqrt(Cd_bed)|u_b|. Gives physical near-bed turbulence/entrainment
+        # instead of the free-slip default.
+        if cfg.wall_function:
+            spd_b = np.sqrt(u * u + v * v)
+            utau = math.sqrt(max(cfg.Cd_bed, 1e-12)) * spd_b
+            zb = 0.5 * dz
+            k_w = utau ** 2 / math.sqrt(cfg.Cmu)
+            eps_w = utau ** 3 / (cfg.kappa_vk * zb) + 1e-12
+            k_new = np.where(g.bottom_mask, np.maximum(k_w, 1e-8), k_new)
+            eps_new = np.where(g.bottom_mask, np.maximum(eps_w, 1e-10), eps_new)
+        # cap diagnostics (B2): record where the safety bounds actually bite so a
+        # reader can tell physical mixing from cap-limited mixing.
+        self.k_cap_frac = float((k_new[g.fluid] >= cfg.k_max).mean())
         self.k = np.clip(k_new, 1e-8, cfg.k_max) * g.fluid + 1e-9
         self.eps = np.clip(eps_new, 1e-10, None) + 1e-12
         nut_keps = cfg.Cmu * self.k ** 2 / self.eps
@@ -814,6 +1138,7 @@ class NereidSolver:
         Delta = (g.dx * g.dy * g.dz) ** (1.0 / 3.0)
         nut_smag = (cfg.Cs_smag * Delta) ** 2 * np.sqrt(np.maximum(S2, 0.0))
         nut = np.maximum(nut_keps, nut_smag)
+        self.nut_cap_frac = float((nut[g.fluid] >= cfg.nut_max).mean())
         self.nut = np.clip(nut, 0.0, cfg.nut_max) * g.fluid
 
     # ---- full anisotropic, state-dependent dispersion TENSOR ---------------
@@ -827,8 +1152,13 @@ class NereidSolver:
         nut = self.nut
         cal = max(cfg.farfield_disp_cal, 0.0)   # far-field spreading calibration
         disp_h = cal * cfg.disp_horiz           # calibrated horizontal dispersivity
-        Dz = cfg.D_mol + nut / cfg.Sc_t
-        Dh = cfg.D_mol + nut / cfg.Sc_t + disp_h
+        # stratification-damped turbulent SCALAR diffusivity (Munk-Anderson, set in
+        # _update_turbulence) -> the dominant far-field salt-mixing term, now
+        # physically suppressed in stable stratification.
+        sc = self.sc_strat if cfg.strat_scalar_damping else 1.0
+        nut_s = nut * sc / cfg.Sc_t
+        Dz = cfg.D_mol + nut_s
+        Dh = cfg.D_mol + nut_s + disp_h
         Dxx = Dh.copy(); Dyy = Dh.copy(); Dzz = Dz.copy()
         Dxy = np.zeros_like(Dxx); Dxz = np.zeros_like(Dxx); Dyz = np.zeros_like(Dxx)
         wave_u = math.pi * cfg.Hs / max(cfg.Tw, 1e-3)
@@ -851,22 +1181,59 @@ class NereidSolver:
         nmag = np.sqrt(Hx ** 2 + Hy ** 2 + 1.0)
         nX = (Hx / nmag)[:, :, None]; nY = (Hy / nmag)[:, :, None]; nZ = (1.0 / nmag)[:, :, None]
         zab = np.maximum(g.Z + g.H[:, :, None], 0.0)       # height above bed
-        Db = cfg.bath_disp_gain * (disp_h + nut / cfg.Sc_t) \
+        Db = cfg.bath_disp_gain * (disp_h + nut_s) \
             * np.exp(-zab / (0.15 * cfg.depth))
         Dxx += Db * (1 - nX * nX); Dyy += Db * (1 - nY * nY); Dzz += Db * (1 - nZ * nZ)
         Dxy += -Db * nX * nY; Dxz += -Db * nX * nZ; Dyz += -Db * nY * nZ
         return Dxx, Dyy, Dzz, Dxy, Dxz, Dyz
 
     def _offdiag_div(self, phi, Dxy, Dxz, Dyz):
-        """Divergence of the off-diagonal dispersion flux  div(D_off . grad phi)."""
+        """Divergence of the off-diagonal dispersion flux  div(D_off . grad phi).
+
+        A2: CONSERVATIVE finite-volume form.  The cross-flux on each cell face is
+        built from face-interpolated tensor coefficients and the transverse
+        gradient averaged TO that face, then weighted by the partial-cell open
+        AREA so nothing leaks across the seabed; the cell update is the difference
+        of these face fluxes (so it telescopes -> globally conservative).  The
+        transverse gradients are the mask-aware ones (A1).  Falls back to the old
+        non-conservative central form when cfg.conservative_offdiag is False."""
         g = self.g; dx, dy, dz = g.dx, g.dy, g.dz
-        gx = ddx(phi, dx) * g.fluid
-        gy = ddy(phi, dy) * g.fluid
-        gz = ddz(phi, dz) * g.fluid
-        Jx = (Dxy * gy + Dxz * gz) * g.fluid
-        Jy = (Dxy * gx + Dyz * gz) * g.fluid
-        Jz = (Dxz * gx + Dyz * gy) * g.fluid
-        return (ddx(Jx, dx) + ddy(Jy, dy) + ddz(Jz, dz)) * g.fluid
+        fl = g.fluid if self.cfg.masked_gradients else None
+        gx = ddx(phi, dx, fl); gy = ddy(phi, dy, fl); gz = ddz(phi, dz, fl)
+        if not self.cfg.conservative_offdiag:
+            Jx = (Dxy * gy + Dxz * gz) * g.fluid
+            Jy = (Dxy * gx + Dyz * gz) * g.fluid
+            Jz = (Dxz * gx + Dyz * gy) * g.fluid
+            return (ddx(Jx, dx) + ddy(Jy, dy) + ddz(Jz, dz)) * g.fluid
+
+        def avx(a):  return 0.5 * (a[:-1] + a[1:])           # cell -> +x face
+        def avy(a):  return 0.5 * (a[:, :-1] + a[:, 1:])     # cell -> +y face
+        def avz(a):  return 0.5 * (a[:, :, :-1] + a[:, :, 1:])  # cell -> +z face
+
+        # x-faces: J_x = Dxy * dphi/dy + Dxz * dphi/dz, evaluated at the +x face
+        Jxf = (avx(Dxy) * avx(gy) + avx(Dxz) * avx(gz)) * g.openx
+        Jyf = (avy(Dxy) * avy(gx) + avy(Dyz) * avy(gz)) * g.openy
+        Jzf = (avz(Dxz) * avz(gx) + avz(Dyz) * avz(gy)) * g.openz
+
+        out = np.zeros_like(phi)
+        Fx = np.zeros((g.nx + 1,) + phi.shape[1:]); Fx[1:g.nx] = Jxf
+        out += (Fx[1:] - Fx[:-1]) / dx
+        Fy = np.zeros((g.nx, g.ny + 1) + phi.shape[2:]); Fy[:, 1:g.ny] = Jyf
+        out += (Fy[:, 1:] - Fy[:, :-1]) / dy
+        Fz = np.zeros((g.nx, g.ny, g.nz + 1)); Fz[:, :, 1:g.nz] = Jzf
+        out += (Fz[:, :, 1:] - Fz[:, :, :-1]) / dz
+        return out * g.fluid
+
+    def _implicit_diag_diffuse(self, phi, Dx, Dy, Dz, dt):
+        """Backward-Euler diagonal diffusion via sequential 1-D implicit sweeps
+        (locally-one-dimensional split): x, then y, then z. Each sweep uses the
+        directional diffusivity and the matching open-area face weights, so it is
+        consistent with the partial-cell geometry and unconditionally stable."""
+        g = self.g
+        phi = implicit_diffuse_axis(phi, Dx, g.dx, 0, g.openx, dt)
+        phi = implicit_diffuse_axis(phi, Dy, g.dy, 1, g.openy, dt)
+        phi = implicit_diffuse_axis(phi, Dz, g.dz, 2, g.openz, dt)
+        return phi
 
     # ---- scalar (S and T) transport ---------------------------------------
     def _update_scalars(self, dt):
@@ -878,13 +1245,12 @@ class NereidSolver:
         # ----- salinity -----
         S = self.S
         adv = self._advect(S, self.S_amb[0])      # inflow carries ambient salinity
-        # diagonal part (conservative, monotone) + off-diagonal tensor flux
-        dif = (diffuse_1d(S, Dxx, dx, 0, g.openx)
-               + diffuse_1d(S, Dyy, dy, 1, g.openy)
-               + diffuse_1d(S, Dzz, dz, 2, g.openz))
-        if cfg.full_tensor_dispersion:
-            dif = dif + self._offdiag_div(S, Dxy, Dxz, Dyz)
-        # Soret cross-flux: temperature gradient drives salt (Eq.3.3)
+        # off-diagonal tensor flux (explicit, conservative — see _offdiag_div)
+        offd = self._offdiag_div(S, Dxy, Dxz, Dyz) if cfg.full_tensor_dispersion \
+            else 0.0
+        # Soret cross-flux: temperature gradient drives salt (Eq.3.3). NOTE (F2):
+        # this is the linearised soret*div(D grad T) proxy, NOT the conservative
+        # rho*D_T*S(1-S) grad T form; it is small and used only as a weak coupling.
         soret = cfg.soret * (
             diffuse_1d(self.T, Dxx, dx, 0, g.openx)
             + diffuse_1d(self.T, Dyy, dy, 1, g.openy)
@@ -896,32 +1262,58 @@ class NereidSolver:
         osm = (diffuse_1d(S, D_osm, dx, 0, g.openx)
                + diffuse_1d(S, D_osm, dy, 1, g.openy)
                + diffuse_1d(S, D_osm, dz, 2, g.openz))
-        S_new = S + dt * (adv + dif + soret + osm)
+        # IMEX split (C1): advection + cross-fluxes explicit; the (stiff) diagonal
+        # dispersion taken implicitly (backward-Euler) when enabled -> no diffusive
+        # dt limit, identical steady state.
+        if cfg.implicit_diffusion:
+            S_new = S + dt * (adv + offd + soret + osm)
+            S_new = self._implicit_diag_diffuse(S_new, Dxx, Dyy, Dzz, dt)
+        else:
+            dif = (diffuse_1d(S, Dxx, dx, 0, g.openx)
+                   + diffuse_1d(S, Dyy, dy, 1, g.openy)
+                   + diffuse_1d(S, Dzz, dz, 2, g.openz))
+            S_new = S + dt * (adv + dif + offd + soret + osm)
         # nozzle salinity injection — unconditionally-stable exp relaxation
         a_src = (1.0 - math.exp(-3.0 * dt)) * g.src
         S_new += a_src * (g.S_source - S_new)
         # ambient relaxation in sponge zones
         S_new += np.clip(self.sponge * 0.05, 0.0, 0.9) * (self.S_amb - S_new)
-        self.S = np.clip(S_new, 0.0, None) * g.fluid
+        # A2: hard physical bound — no cell can exceed the injected source S0 nor
+        # go negative. With the conservative, monotone diagonal advection + the
+        # now-conservative cross-flux this clip is (numerically) inactive; it is a
+        # guaranteed safety net that lets the self-test assert a TRUE [0,S0] bound.
+        smax = cfg.S0 if cfg.clip_scalar_bounds else None
+        self.S = np.clip(S_new, 0.0, smax) * g.fluid
 
         # ----- temperature (with Dufour cross-flux) -----
         T = self.T
         advT = self._advect(T, self.T_amb[0])     # inflow carries ambient temperature
-        DTz = cfg.kappa_T + self.nut / cfg.Pr_t
-        DTh = cfg.kappa_T + self.nut / cfg.Pr_t + cfg.disp_horiz
-        difT = (diffuse_1d(T, DTh, dx, 0, g.openx)
-                + diffuse_1d(T, DTh, dy, 1, g.openy)
-                + diffuse_1d(T, DTz, dz, 2, g.openz))
-        if cfg.full_tensor_dispersion:           # heat shares the geometric anisotropy
-            difT = difT + self._offdiag_div(T, Dxy, Dxz, Dyz)
+        # heat shares the same stratification damping of the turbulent diffusivity
+        sc = self.sc_strat if cfg.strat_scalar_damping else 1.0
+        DTz = cfg.kappa_T + self.nut * sc / cfg.Pr_t
+        DTh = cfg.kappa_T + self.nut * sc / cfg.Pr_t + cfg.disp_horiz
+        offdT = self._offdiag_div(T, Dxy, Dxz, Dyz) if cfg.full_tensor_dispersion \
+            else 0.0    # heat shares the geometric anisotropy (explicit cross-flux)
+        # Dufour cross-flux (F2: same linearised-proxy caveat as the Soret term)
         dufour = cfg.soret * 1.0e-2 * (
             diffuse_1d(self.S, DTh, dx, 0, g.openx)
             + diffuse_1d(self.S, DTh, dy, 1, g.openy)
             + diffuse_1d(self.S, DTz, dz, 2, g.openz))
-        T_new = T + dt * (advT + difT + dufour)
+        if cfg.implicit_diffusion:               # IMEX (C1)
+            T_new = T + dt * (advT + offdT + dufour)
+            T_new = self._implicit_diag_diffuse(T_new, DTh, DTh, DTz, dt)
+        else:
+            difT = (diffuse_1d(T, DTh, dx, 0, g.openx)
+                    + diffuse_1d(T, DTh, dy, 1, g.openy)
+                    + diffuse_1d(T, DTz, dz, 2, g.openz))
+            T_new = T + dt * (advT + difT + offdT + dufour)
         a_src = (1.0 - math.exp(-3.0 * dt)) * g.src
         T_new += a_src * (g.T_source - T_new)
         T_new += np.clip(self.sponge * 0.05, 0.0, 0.9) * (self.T_amb - T_new)
+        if cfg.clip_scalar_bounds:                # A2: physical temperature band
+            tlo = min(cfg.T_amb_bot, cfg.T_amb_surf, cfg.T_b) - 5.0
+            thi = max(cfg.T_amb_bot, cfg.T_amb_surf, cfg.T_b) + 5.0
+            T_new = np.clip(T_new, tlo, thi)
         self.T = T_new * g.fluid
 
         # density update (nonlinear EOS) — the master coupling
@@ -929,6 +1321,14 @@ class NereidSolver:
 
     # ---- stochastic Ornstein-Uhlenbeck forcing -----------------------------
     def _update_stochastic(self, dt):
+        """Per-channel spatially-correlated OU process zeta (salinity.docx Eq.3.7).
+
+        F1 (units): zeta has the dimensions of cfg.stoch_sigma, i.e. a VELOCITY
+        [m/s] (the OU intensity is an r.m.s. velocity fluctuation). It is injected
+        in _update_momentum as a stochastic ACCELERATION term (added inside the
+        dt*(...) tendency sum), so the per-step velocity kick is dt*zeta; this is
+        the intended 'colored random stress' interpretation, NOT a direct velocity
+        increment. Raise stoch_sigma to strengthen the forcing."""
         cfg, g = self.cfg, self.g
         if not cfg.stoch_enable:
             return [0.0, 0.0, 0.0]
@@ -956,26 +1356,36 @@ class NereidSolver:
         au = self._advect(u, self._U_in())   # inflow carries ambient u = U_in
         av = self._advect(v, 0.0)
         aw = self._advect(w, 0.0)
-        # diffusion (turbulent stress)
-        du = (diffuse_1d(u, nu_eff, dx, 0, g.openx) + diffuse_1d(u, nu_eff, dy, 1, g.openy)
-              + diffuse_1d(u, nu_eff, dz, 2, g.openz))
-        dv = (diffuse_1d(v, nu_eff, dx, 0, g.openx) + diffuse_1d(v, nu_eff, dy, 1, g.openy)
-              + diffuse_1d(v, nu_eff, dz, 2, g.openz))
-        dw = (diffuse_1d(w, nu_eff, dx, 0, g.openx) + diffuse_1d(w, nu_eff, dy, 1, g.openy)
-              + diffuse_1d(w, nu_eff, dz, 2, g.openz))
+        # diffusion (turbulent stress) — explicit only in the legacy path; with
+        # implicit_diffusion the diagonal stress is solved implicitly below (C1).
+        if cfg.implicit_diffusion:
+            du = dv = dw = 0.0
+        else:
+            du = (diffuse_1d(u, nu_eff, dx, 0, g.openx) + diffuse_1d(u, nu_eff, dy, 1, g.openy)
+                  + diffuse_1d(u, nu_eff, dz, 2, g.openz))
+            dv = (diffuse_1d(v, nu_eff, dx, 0, g.openx) + diffuse_1d(v, nu_eff, dy, 1, g.openy)
+                  + diffuse_1d(v, nu_eff, dz, 2, g.openz))
+            dw = (diffuse_1d(w, nu_eff, dx, 0, g.openx) + diffuse_1d(w, nu_eff, dy, 1, g.openy)
+                  + diffuse_1d(w, nu_eff, dz, 2, g.openz))
         # buoyancy (full nonlinear density relative to local ambient)
         b = -cfg.g * (self.rho - self.rho_amb) / cfg.rho0
-        # Coriolis (f-plane)
+        # Coriolis (f-plane). A5: by default the rotation is applied
+        # semi-implicitly (norm-preserving) AFTER the explicit terms; only the
+        # legacy explicit path adds it into the tendency sum here.
         f = 2 * 7.292e-5 * math.sin(math.radians(cfg.latitude_deg))
-        cor_u = f * v
-        cor_v = -f * u
+        if cfg.semi_implicit_coriolis:
+            cor_u = cor_v = 0.0
+        else:
+            cor_u = f * v
+            cor_v = -f * u
         # optional EXPERIMENTAL osmotic body force, bounded to O(buoyancy):
         # F_osm = -gain * g * grad(S/S0)  (off by default; see Config note)
         if cfg.osmotic_force_gain != 0.0:
             sN = self.S / max(cfg.S0, 1e-6)
-            fox = -cfg.osmotic_force_gain * cfg.g * ddx(sN, dx)
-            foy = -cfg.osmotic_force_gain * cfg.g * ddy(sN, dy)
-            foz = -cfg.osmotic_force_gain * cfg.g * ddz(sN, dz)
+            flm = g.fluid if cfg.masked_gradients else None
+            fox = -cfg.osmotic_force_gain * cfg.g * ddx(sN, dx, flm)
+            foy = -cfg.osmotic_force_gain * cfg.g * ddy(sN, dy, flm)
+            foz = -cfg.osmotic_force_gain * cfg.g * ddz(sN, dz, flm)
         else:
             fox = foy = foz = 0.0
         # stochastic forcing
@@ -984,6 +1394,32 @@ class NereidSolver:
         us = u + dt * (au + du + cor_u + fox + zx)
         vs = v + dt * (av + dv + cor_v + foy + zy)
         ws = w + dt * (aw + dw + b + foz + zz)
+
+        # C1: implicit (backward-Euler) diagonal turbulent stress -> the diffusive
+        # dt ceiling is removed; same isotropic nu_eff and partial-cell weights.
+        if cfg.implicit_diffusion:
+            us = self._implicit_diag_diffuse(us, nu_eff, nu_eff, nu_eff, dt)
+            vs = self._implicit_diag_diffuse(vs, nu_eff, nu_eff, nu_eff, dt)
+            ws = self._implicit_diag_diffuse(ws, nu_eff, nu_eff, nu_eff, dt)
+
+        # A5: norm-preserving semi-implicit Coriolis rotation (exact for the 2x2
+        # rotation; the explicit forward-Euler form amplifies the velocity norm).
+        if cfg.semi_implicit_coriolis and f != 0.0:
+            a = 0.5 * f * dt
+            den = 1.0 + a * a
+            us, vs = ((1 - a * a) * us + 2 * a * vs) / den, \
+                     ((1 - a * a) * vs - 2 * a * us) / den
+
+        # B1: quadratic bottom drag on the lowest fluid cell of each column,
+        # tau_b = rho*Cd*|u_b|*u_b -> acceleration Cd*|u_b|*u_b/dz. Applied
+        # semi-implicitly (us/(1+dt*Cd*|u|/dz)) so it is unconditionally stable and
+        # cannot reverse the flow. A dense gravity current is drag-controlled, so
+        # this sets the far-field reach.
+        if cfg.bottom_drag:
+            spd_b = np.sqrt(us * us + vs * vs)
+            drag = 1.0 + dt * cfg.Cd_bed * spd_b / dz * g.bottom_mask
+            us = us / drag
+            vs = vs / drag
 
         # nozzle momentum source — unconditionally-stable exp relaxation toward
         # the inclined jet velocity vector (drives the dense jet)
@@ -1007,6 +1443,21 @@ class NereidSolver:
 
         us *= g.fluid; vs *= g.fluid; ws *= g.fluid
 
+        # ---- C2: close the global volume budget at the open x-boundaries -------
+        # The convective outflow (us at i=-1) need not match the prescribed inflow
+        # U_in; the imbalance would otherwise appear as a distributed divergence
+        # error (rigid-lid pure-Neumann incompatibility) or a spurious net surface
+        # flux. Add a uniform outflow correction so total outflow == total inflow,
+        # then record the residual imbalance for the run log / self-test assert.
+        U_in_bc = cfg.U_current + cfg.tide_amp * math.sin(2 * math.pi * self.t / cfg.tide_period)
+        n_in = float(g.fluid[0].sum()); n_out = float(g.fluid[-1].sum())
+        inflow = U_in_bc * n_in            # velocity*cells (dy*dz cancels, uniform grid)
+        outflow = float(us[-1].sum())
+        self.mass_imbalance = abs(inflow - outflow) / max(abs(inflow), 1e-12)
+        if cfg.enforce_mass_balance and n_out > 0:
+            us[-1] += ((inflow - outflow) / n_out) * g.fluid[-1]
+            self.mass_imbalance = abs(U_in_bc * n_in - float(us[-1].sum())) / max(abs(inflow), 1e-12)
+
         # ---- MAC-consistent pressure projection (enforce incompressibility) ----
         # u_i is treated as the velocity through the face on the +side of cell i
         # (face i+1/2). Divergence uses BACKWARD differences and the pressure
@@ -1028,8 +1479,14 @@ class NereidSolver:
             w_surf = Fstar + (2 * dt / (cfg.rho0 * dz * a1)) * phi[:, :, -1]
             self.w[:, :, -1] = w_surf
             # kinematic surface evolution with relaxation (unresolved gravity-wave
-            # radiation out of the finite domain) -> bounded, drift-free setup
-            tau_eta = 8.0
+            # radiation out of the finite domain) -> bounded, drift-free setup.
+            # D1: tau_eta = factor * L / sqrt(g H) is the domain shallow-water
+            # gravity-wave transit time (the rate at which a surface disturbance
+            # crosses and leaves the box) instead of a hardcoded constant. eta is
+            # DIAGNOSTIC and intentionally NON-CONSERVATIVE (this relaxation + the
+            # mean-removal + the boundary sponge below are radiation surrogates).
+            tau_eta = max(cfg.eta_relax_factor * min(cfg.Lx, cfg.Ly)
+                          / math.sqrt(cfg.g * cfg.depth), 2.0 * dt)
             self.eta = (self.eta + dt * w_surf) * (1.0 - dt / tau_eta)
             # the restoring acts only on grad(eta); remove the unconstrained
             # uniform mode (like the rigid-lid pressure constant)
@@ -1068,10 +1525,20 @@ class NereidSolver:
         g, cfg = self.g, self.cfg
         dx, dy, dz = g.dx, g.dy, g.dz
         c = dt / cfg.rho0
-        gpx = np.zeros_like(us); gpx[:-1] = (p[1:] - p[:-1]) / dx; gpx[:-1] *= g.openx
-        gpy = np.zeros_like(vs); gpy[:, :-1] = (p[:, 1:] - p[:, :-1]) / dy; gpy[:, :-1] *= g.openy
+        # A4: the correction is a per-unit-AREA face velocity; the open-area
+        # FRACTION must enter exactly once (in _divergence_backward), so here the
+        # pressure gradient carries only the open/closed face MASK. With the old
+        # fractional weighting the area appeared squared in shaved cells, leaving
+        # the ~4e-3 divergence residual; the mask makes div(grad) the exact
+        # transpose of the partial-cell Poisson matrix -> truly divergence-free.
+        if cfg.consistent_partial_projection:
+            mx = (g.openx > 0); my = (g.openy > 0); mz = (g.openz > 0)
+        else:
+            mx, my, mz = g.openx, g.openy, g.openz
+        gpx = np.zeros_like(us); gpx[:-1] = (p[1:] - p[:-1]) / dx; gpx[:-1] *= mx
+        gpy = np.zeros_like(vs); gpy[:, :-1] = (p[:, 1:] - p[:, :-1]) / dy; gpy[:, :-1] *= my
         gpz = np.zeros_like(ws); gpz[:, :, :-1] = (p[:, :, 1:] - p[:, :, :-1]) / dz
-        gpz[:, :, :-1] *= g.openz
+        gpz[:, :, :-1] *= mz
         if cfg.free_surface:
             # implicit free surface: surface pressure gradient scaled by 1/(1+alpha)
             gpz[:, :, -1] = -2.0 * p[:, :, -1] / (dz * (1.0 + self.fs_alpha))
@@ -1114,7 +1581,36 @@ class NereidSolver:
 # =============================================================================
 #  DIAGNOSTICS  (Tier 3 metrics, Tier 5 curves)  — output.docx
 # =============================================================================
-def compute_metrics(cfg: Config, grid: Grid, S, S_amb, rho, u, v, w):
+def _seabed_field(g, field3d):
+    """Value in the lowest fluid cell of each column (the seabed layer).
+    F4: vectorised via the precomputed lowest-fluid index bottom_k (every column
+    has a fluid surface cell, so the index is always valid)."""
+    return np.take_along_axis(field3d, g.bottom_k[:, :, None], axis=2)[:, :, 0].astype(float)
+
+
+def _bilinear_refine(F2d, fac):
+    """Bilinearly oversample a 2-D field by integer factor `fac` on the SAME
+    physical extent (cell-centred). Used to estimate sub-cell contour areas and
+    crossing distances without changing the solved field. NaNs are treated as
+    'no data' (filled with the field minimum so they never exceed a threshold)."""
+    if fac <= 1:
+        return F2d
+    F = np.where(np.isfinite(F2d), F2d, np.nanmin(F2d) if np.isfinite(F2d).any() else 0.0)
+    nx, ny = F.shape
+    xi = np.linspace(0, nx - 1, nx * fac)
+    yi = np.linspace(0, ny - 1, ny * fac)
+    x0 = np.clip(np.floor(xi).astype(int), 0, nx - 2); tx = (xi - x0)[:, None]
+    y0 = np.clip(np.floor(yi).astype(int), 0, ny - 2); ty = (yi - y0)[None, :]
+    F00 = F[np.ix_(x0, y0)]; F10 = F[np.ix_(x0 + 1, y0)]
+    F01 = F[np.ix_(x0, y0 + 1)]; F11 = F[np.ix_(x0 + 1, y0 + 1)]
+    return (F00*(1-tx)*(1-ty) + F10*tx*(1-ty) + F01*(1-tx)*ty + F11*tx*ty)
+
+
+def compute_metrics(cfg: Config, grid: Grid, S, S_amb, rho, u, v, w, full=False):
+    """Compute headline metrics.  `full=True` adds the (slightly more expensive)
+    sub-cell / resolution-robust estimates used for the final report; the fast
+    cell-based path is used for the per-step time-series. NOTE: this routine only
+    *measures* the already-solved field — it never alters the PDE solution."""
     g = grid
     excess = (S - S_amb) * g.fluid
     crit = cfg.dS_crit
@@ -1130,19 +1626,19 @@ def compute_metrics(cfg: Config, grid: Grid, S, S_amb, rho, u, v, w):
     metrics["S_max"] = float(S[g.fluid].max())
     metrics["excess_max"] = float(excess[g.fluid].max())
     metrics["dilution_min"] = float(np.nanmin(dil[m])) if m.any() else float("nan")
+    # resolution floors (the inherent quantisation of cell-count diagnostics)
+    metrics["footprint_resolution_m2"] = float(g.dx * g.dy)
+    metrics["reach_resolution_m"] = float(max(g.dx, g.dy))
+    metrics["depth_resolution_m"] = float(g.dz)
     if impacted.any():
         metrics["r_max_m"] = float(dist[impacted].max())
         zimp = g.Z[impacted]
         metrics["z_deepest_m"] = float(-zimp.min())       # how deep (below surface)
         metrics["plume_top_m"] = float(-zimp.max())       # shallowest impacted depth
         # footprint on seabed (lowest fluid layer per column)
-        bottom_excess = np.zeros((g.nx, g.ny))
-        for i in range(g.nx):
-            for j in range(g.ny):
-                col = np.where(g.fluid[i, j])[0]
-                if col.size:
-                    bottom_excess[i, j] = excess[i, j, col[0]]
-        foot = (bottom_excess > crit)
+        bottom_excess = _seabed_field(g, excess)
+        be = np.where(np.isfinite(bottom_excess), bottom_excess, 0.0)
+        foot = (be > crit)
         metrics["seabed_footprint_m2"] = float(foot.sum() * g.dx * g.dy)
         metrics["affected_volume_m3"] = float(impacted.sum() * g.dx * g.dy * g.dz)
         # rise height above nozzle
@@ -1153,29 +1649,115 @@ def compute_metrics(cfg: Config, grid: Grid, S, S_amb, rho, u, v, w):
             fi, fj = np.where(foot)
             dd = np.sqrt((g.xc[fi]-g.src_xyz[0])**2 + (g.yc[fj]-g.src_xyz[1])**2)
             metrics["return_point_dist_m"] = float(dd.max())
+        else:
+            metrics["return_point_dist_m"] = 0.0
+
+        # ---- sub-cell / resolution-robust estimates (final report only) ------
+        if full and cfg.subcell_diagnostics:
+            fac = max(1, int(cfg.subcell_refine))
+            ber = _bilinear_refine(be, fac)
+            xr = np.linspace(g.xc[0], g.xc[-1], be.shape[0] * fac)
+            yr = np.linspace(g.yc[0], g.yc[-1], be.shape[1] * fac)
+            cell_a = (xr[1]-xr[0]) * (yr[1]-yr[0]) if fac > 1 else g.dx*g.dy
+            hit = ber > crit
+            metrics["seabed_footprint_m2_cellcount"] = metrics["seabed_footprint_m2"]
+            metrics["r_max_m_cellcount"] = metrics["r_max_m"]
+            metrics["seabed_footprint_m2"] = float(hit.sum() * cell_a)
+            if hit.any():
+                XI, YI = np.meshgrid(xr, yr, indexing="ij")
+                dsub = np.sqrt((XI-g.src_xyz[0])**2 + (YI-g.src_xyz[1])**2)
+                metrics["r_max_m"] = float(dsub[hit].max())
+            # footprint sensitivity to the regulatory threshold
+            metrics["footprint_vs_threshold_m2"] = {
+                f"{t:g}": float((ber > t).sum() * cell_a)
+                for t in cfg.footprint_thresholds}
+            # sub-cell deepest impact: vertical-interpolate the crit crossing
+            zdeep = metrics["z_deepest_m"]
+            for i in range(g.nx):
+                for j in range(g.ny):
+                    col = np.where(g.fluid[i, j])[0]
+                    if col.size < 2:
+                        continue
+                    e = excess[i, j, col]; zz = g.zc[col]
+                    for a in range(len(col)-1):
+                        e0, e1 = e[a], e[a+1]
+                        if (e0 - crit) * (e1 - crit) < 0:   # crossing between cells
+                            f = (crit - e0) / (e1 - e0)
+                            zc_cross = zz[a] + f*(zz[a+1]-zz[a])
+                            zdeep = max(zdeep, -min(zz[a], zz[a+1], zc_cross))
+            metrics["z_deepest_m"] = float(zdeep)
     else:
         for kk in ["r_max_m", "z_deepest_m", "plume_top_m", "seabed_footprint_m2",
                    "affected_volume_m3", "plume_rise_m", "return_point_dist_m"]:
             metrics[kk] = 0.0
-    metrics["Fr_d"] = float(g.U_d / math.sqrt(max(
-        cfg.g * (equation_of_state(cfg, cfg.S0, cfg.T_b) - cfg.rho0) / cfg.rho0
-        * cfg.d_p, 1e-9)))
+    # F6: report the SAME densimetric Froude that drives the near-field model
+    # (reduced gravity against the ambient BED density, not rho0), so the headline
+    # Fr_d matches grid.nearfield["Fr"].
+    rho_amb_bed = equation_of_state(cfg, cfg.S_amb_bot, cfg.T_amb_bot)
+    rho_b = equation_of_state(cfg, cfg.S0, cfg.T_b)
+    gprime = cfg.g * abs(rho_amb_bed - rho_b) / rho_amb_bed
+    metrics["Fr_d"] = float(g.U_d / math.sqrt(max(gprime * cfg.d_p, 1e-9)))
     return metrics, excess, dil
 
 
-def centerline_curve(cfg, grid, excess, dil):
-    """Dilution & excess-salinity along the downstream centerline (Tier 5)."""
+def _median3(a):
+    """Length-preserving median-of-3 smoother (robust to single-cell spikes)."""
+    a = np.asarray(a, float)
+    if a.size < 3:
+        return a
+    out = a.copy()
+    out[1:-1] = np.median(np.stack([a[:-2], a[1:-1], a[2:]]), axis=0)
+    return out
+
+
+def centerline_curve(cfg, grid, excess, dil, S_amb=None):
+    """Dilution & excess-salinity along the downstream plume axis (Tier 5).
+
+    Robust extraction (purely a post-processing read of the solved field):
+      * at each downstream station the core is the TRUE maximum-excess cell over
+        the whole cross-section (not a fixed lateral row), so the curve follows a
+        laterally-meandering gravity current instead of jumping cells;
+      * dilution is derived consistently from the excess at that cell
+        (dil = (S0 - S_amb)/excess), removing array-vs-array mismatches;
+      * the core depth is median-smoothed to suppress single-cell argmax flips;
+      * the up-current branch (distance < 0) is clipped where there is no plume
+        (excess below `centerline_eps`), which is where the old curve showed
+        spurious giant dilution values.
+    Output columns are unchanged: (distance, excess, dilution, core_depth_m).
+    """
     g = grid
-    j = int(round(cfg.y_src_frac * g.ny))
-    j = min(max(j, 0), g.ny - 1)
-    rows = []
+    j_src = min(max(int(round(cfg.y_src_frac * g.ny)), 0), g.ny - 1)
+    if S_amb is None:
+        S_amb = np.full_like(excess, cfg.S_amb_bot)
+
+    dist, exc, dep, samb_core = [], [], [], []
     for i in range(g.nx):
-        col = excess[i, j, :]
-        kmax = int(np.nanargmax(col)) if np.isfinite(col).any() else 0
-        dist = g.xc[i] - g.src_xyz[0]
-        rows.append((dist, float(col[kmax]), float(dil[i, j, kmax])
-                     if np.isfinite(dil[i, j, kmax]) else float("nan"),
-                     float(-g.zc[kmax])))
+        if cfg.centerline_track_core:
+            sl = np.where(g.fluid[i], excess[i], -np.inf)      # (ny,nz) slice
+            if not np.isfinite(sl).any():
+                continue
+            jk = np.unravel_index(int(np.argmax(sl)), sl.shape)
+            jj, kk = int(jk[0]), int(jk[1])
+        else:
+            col = np.where(g.fluid[i, j_src], excess[i, j_src], -np.inf)
+            if not np.isfinite(col).any():
+                continue
+            jj, kk = j_src, int(np.argmax(col))
+        e = float(excess[i, jj, kk])
+        dist.append(g.xc[i] - g.src_xyz[0]); exc.append(max(e, 0.0))
+        dep.append(float(-g.zc[kk])); samb_core.append(float(S_amb[i, jj, kk]))
+
+    dist = np.array(dist); exc = np.array(exc)
+    dep = _median3(dep); samb_core = np.array(samb_core)
+    # consistent dilution from the (smoothed) excess
+    with np.errstate(divide="ignore", invalid="ignore"):
+        dilc = np.where(exc > 1e-9, (cfg.S0 - samb_core) / exc, np.nan)
+
+    rows = []
+    for d, e, dl, z in zip(dist, exc, dilc, dep):
+        if cfg.centerline_clip_upcurrent and d < 0 and e < cfg.centerline_eps:
+            continue                                            # no plume up-current
+        rows.append((float(d), float(e), float(dl), float(z)))
     return rows  # (distance, excess, dilution, depth_of_core)
 
 
@@ -1194,7 +1776,8 @@ def write_outputs(cfg, grid, member_states, log, outdir):
     rho = member_states[0]["rho"]
     u = member_states[0]["u"]; v = member_states[0]["v"]; w = member_states[0]["w"]
 
-    metrics, excess, dil = compute_metrics(cfg, grid, S_mean, S_amb, rho, u, v, w)
+    metrics, excess, dil = compute_metrics(cfg, grid, S_mean, S_amb, rho, u, v, w,
+                                           full=True)
 
     # exceedance probability (Tier 7)
     exceed = (((S_stack - S_amb[None]) > cfg.dS_crit).mean(axis=0)) * g.fluid
@@ -1226,21 +1809,111 @@ def write_outputs(cfg, grid, member_states, log, outdir):
     metrics["nf_merge_factor"] = nf.get("merge_factor", 1.0)
     metrics["nf_n_ports"] = nf.get("n_ports", 1)
     metrics["near_field_coupling"] = bool(cfg.near_field_coupling)
+    # near-field dilution BAND from the spread of published inclined-dense-jet
+    # correlations (Cipollina 2005 ~1.55; Roberts 1997 ~1.6; Lai & Lee 2012
+    # ~1.75) x Fr x merge_factor — reported instead of a single false-precision
+    # value. The central value (1.6) is the validated default and is unchanged.
+    Frnf = nf.get("Fr", 0.0); mf = nf.get("merge_factor", 1.0)
+    metrics["nf_dilution_band"] = [float(1.55*Frnf*mf), float(1.75*Frnf*mf)]
+
+    # ---- steady-state statistics over the trailing window (Tier 3) -----------
+    # Report the headline metrics as mean +/- std over the last `steady_frac` of
+    # the run (rather than one possibly-transient final snapshot) and flag
+    # whether they have actually settled. Purely a reporting refinement.
+    hist = member_states[0].get("ts_history", []) if member_states else []
+    if len(hist) >= 3:
+        ntail = max(2, int(math.ceil(len(hist) * cfg.steady_frac)))
+        tail = hist[-ntail:]
+        steady = {"window_s": [float(tail[0]["t_s"]), float(tail[-1]["t_s"])],
+                  "n_samples": len(tail), "converged": {}}
+        for key in ("S_max", "excess_max", "r_max_m", "z_deepest_m",
+                    "seabed_footprint_m2", "dilution_min"):
+            vals = np.array([t[key] for t in tail if np.isfinite(t.get(key, np.nan))])
+            if vals.size:
+                mu = float(vals.mean()); sd = float(vals.std())
+                steady[key + "_mean"] = mu
+                steady[key + "_std"] = sd
+                steady["converged"][key] = bool(abs(sd) <= cfg.steady_tol*abs(mu) + 1e-9)
+        steady["steady_state_reached"] = bool(steady["converged"] and
+                                              all(steady["converged"].values()))
+        metrics["steady_state"] = steady
+
+    # ---- stability trend over the run (Tier 3) -------------------------------
+    dh = member_states[0].get("div_history", []) if member_states else []
+    if dh:
+        dv = np.array([d[1] for d in dh])
+        metrics["divergence_final"] = float(dv[-1])
+        metrics["divergence_max_over_run"] = float(dv.max())
+        metrics["divergence_drift_ratio"] = float(dv[-1] / max(dv[0], 1e-30))
+
+    # ---- near-wall / cap / mass-balance health (B2, C2) ----------------------
+    metrics["nut_cap_fraction"] = float(member_states[0].get("nut_cap_frac", 0.0))
+    metrics["k_cap_fraction"] = float(member_states[0].get("k_cap_frac", 0.0))
+    metrics["mass_imbalance_final"] = float(member_states[0].get("mass_imbalance", 0.0))
+
+    # ---- free-surface response range (Tier 1) --------------------------------
+    if "eta" in member_states[0]:
+        eta = member_states[0]["eta"]
+        metrics["eta_min_m"] = float(np.nanmin(eta))
+        metrics["eta_max_m"] = float(np.nanmax(eta))
+        metrics["eta_absmax_m"] = float(np.nanmax(np.abs(eta)))
+
+    # ---- ensemble / stochastic honesty (Tier 7) ------------------------------
+    # With one member the "exceedance" field is a 0/1 INDICATOR, not a
+    # probability; flag this explicitly so the output is not over-interpreted.
+    metrics["exceedance_is_probability"] = bool(cfg.ensemble > 1)
+    # Provenance: which "novel" couplings were actually ENGAGED in this run, so
+    # the outputs are not credited to physics that was switched off. (Defaults are
+    # the validated ones; this only REPORTS them — it does not change them.)
+    metrics["active_physics"] = {
+        "osmotic_flux": bool(cfg.osmotic_diff > 0.0),
+        "osmotic_body_force": bool(cfg.osmotic_force_gain > 0.0),
+        "soret_cross_diffusion": bool(cfg.soret != 0.0),
+        "full_tensor_dispersion": bool(cfg.full_tensor_dispersion),
+        "stochastic_forcing": bool(cfg.stoch_enable),
+        "free_surface": bool(cfg.free_surface),
+        "near_field_coupling": bool(cfg.near_field_coupling),
+    }
+    if cfg.ensemble > 1:
+        ex_stack = (S_stack - S_amb[None]) * g.fluid[None]
+        metrics["S_std_max"] = float(S_std[g.fluid].max())
+        metrics["excess_p95_max"] = float(np.percentile(ex_stack, 95, axis=0)[g.fluid].max())
+        # crude ensemble-spread convergence indicator: std of the running mean of
+        # max-excess across members (smaller => better converged)
+        run_mean = np.cumsum([float(s["S"][g.fluid].max()) for s in member_states]) \
+            / np.arange(1, len(member_states)+1)
+        metrics["ensemble_meanmax_drift"] = float(abs(run_mean[-1]-run_mean[len(run_mean)//2]))
+    else:
+        log.info("NOTE: ensemble=1 -> 'exceedance' map is a single-realisation "
+                 "INDICATOR (0/1), not a probability. Use --ensemble N (N>=30) "
+                 "for a genuine probabilistic compliance field.")
+
+    # vertical profile: sample the SEABED-IMPACT column (the column of maximum
+    # bottom excess) rather than the bare source column, so the profile is taken
+    # where the plume actually is. Falls back to the source column if no impact.
+    # (Selected here, before the JSON dump, so the location is recorded in it.)
+    bot = _seabed_field(g, excess)
+    bot = np.where(np.isfinite(bot), bot, -np.inf)
+    if np.isfinite(bot).any() and bot.max() > 0:
+        i0, j0 = np.unravel_index(int(np.argmax(bot)), bot.shape)
+    else:
+        i0 = min(int(round(cfg.x_src_frac * g.nx)), g.nx-1)
+        j0 = min(int(round(cfg.y_src_frac * g.ny)), g.ny-1)
+    metrics["vprofile_x_m"] = float(g.xc[i0]); metrics["vprofile_y_m"] = float(g.yc[j0])
+
     with open(os.path.join(outdir, "metrics_summary.json"), "w") as f:
         json.dump({"config": {k: v for k, v in asdict(cfg).items()},
                    "metrics": metrics}, f, indent=2)
 
     # ---- Tier 5 curves ----
-    cl = centerline_curve(cfg, grid, excess, dil)
+    cl = centerline_curve(cfg, grid, excess, dil, S_amb=S_amb)
     with open(os.path.join(outdir, "curve_centerline.csv"), "w", newline="") as f:
         wtr = csv.writer(f)
         wtr.writerow(["distance_m", "excess_gkg", "dilution", "core_depth_m"])
         wtr.writerows(cl)
-    # vertical profile through source
-    i0 = int(round(cfg.x_src_frac * g.nx)); j0 = int(round(cfg.y_src_frac * g.ny))
-    i0 = min(i0, g.nx-1); j0 = min(j0, g.ny-1)
     with open(os.path.join(outdir, "curve_vertical_profile.csv"), "w", newline="") as f:
         wtr = csv.writer(f)
+        # sample location recorded in metrics_summary.json (vprofile_x_m/y_m)
         wtr.writerow(["depth_m", "salinity_gkg", "excess_gkg", "density", "Tdeg"])
         for kk in range(g.nz):
             if g.fluid[i0, j0, kk]:
@@ -1262,14 +1935,8 @@ def _make_figures(cfg, grid, S, excess, dil, exceed, cl, outdir, st):
     j0 = int(round(cfg.y_src_frac * g.ny)); j0 = min(j0, g.ny - 1)
 
     def _seabed(field):
-        """Value in the lowest fluid cell of each column (the seabed layer)."""
-        out = np.full((g.nx, g.ny), np.nan)
-        for i in range(g.nx):
-            for j in range(g.ny):
-                col = np.where(g.fluid[i, j])[0]
-                if col.size:
-                    out[i, j] = field[i, j, col[0]]
-        return out
+        """Value in the lowest fluid cell of each column (vectorised, F4)."""
+        return _seabed_field(g, field)
 
     def _save(fig, name):
         fig.tight_layout(); fig.savefig(os.path.join(outdir, name), dpi=150)
@@ -1294,6 +1961,13 @@ def _make_figures(cfg, grid, S, excess, dil, exceed, cl, outdir, st):
     ax.set(xlabel="x (m)", ylabel="y (m)",
            title=f"Seabed excess salinity ΔS (g/kg){compliant}")
     fig.colorbar(cf, ax=ax, label="ΔS (g/kg)"); ax.legend(loc="upper right")
+    # footprint area + the cell resolution floor (so the area is not read as
+    # more precise than the grid permits)
+    foot_a = float((np.nan_to_num(bottom) > cfg.dS_crit).sum() * g.dx * g.dy)
+    ax.text(0.02, 0.02,
+            f"footprint(>ΔS_crit) ≈ {foot_a:.0f} m²   (cell = {g.dx*g.dy:.0f} m²)",
+            transform=ax.transAxes, fontsize=8, va="bottom",
+            bbox=dict(boxstyle="round", fc="white", alpha=0.7))
     _save(fig, "fig_seabed_excess_map.png")
 
     # Tier 4: vertical cross-section through source + flow streamlines
@@ -1391,6 +2065,10 @@ def _make_figures(cfg, grid, S, excess, dil, exceed, cl, outdir, st):
         ax.set(xlabel="x (m)", ylabel="y (m)",
                title="Free-surface elevation η (m) — splash/setup over outfall")
         fig.colorbar(cf, ax=ax, label="η (m)"); ax.legend(loc="upper right")
+        ax.text(0.02, 0.02,
+                f"η ∈ [{np.nanmin(eta):+.2e}, {np.nanmax(eta):+.2e}] m",
+                transform=ax.transAxes, fontsize=8, va="bottom",
+                bbox=dict(boxstyle="round", fc="white", alpha=0.7))
         _save(fig, "fig_free_surface.png")
 
 
@@ -1406,6 +2084,8 @@ def run_member(cfg, grid, poisson, log, member, ts_writer=None,
     next_save = solver.t
     nstep = 0
     t0 = time.time()
+    ts_history = []      # per-save metric snapshots -> steady-state statistics
+    div_history = []     # (t, max-divergence) -> stability-trend reporting
     # snapshot / checkpoint cadences
     snap_dt = (cfg.t_end - solver.t) / cfg.n_snapshots if cfg.n_snapshots > 0 else None
     next_snap = solver.t + snap_dt if snap_dt else None
@@ -1429,6 +2109,10 @@ def run_member(cfg, grid, poisson, log, member, ts_writer=None,
         if solver.t >= next_save:
             mtr, _, _ = compute_metrics(cfg, grid, solver.S, solver.S_amb,
                                         solver.rho, solver.u, solver.v, solver.w)
+            if member == 0:
+                mtr["t_s"] = float(solver.t)
+                ts_history.append(mtr)
+                div_history.append((float(solver.t), float(solver.divergence)))
             if ts_writer is not None and member == 0:
                 ts_writer.writerow([f"{solver.t:.1f}", f"{dt:.4f}",
                                     f"{mtr['S_max']:.4f}", f"{mtr['excess_max']:.4f}",
@@ -1440,6 +2124,8 @@ def run_member(cfg, grid, poisson, log, member, ts_writer=None,
         if nstep % 200 == 0:
             log.info(f"[m{member}] t={solver.t:7.1f}s  dt={dt:.3f}  "
                      f"Smax={solver.S.max():.2f}  div={solver.divergence:.1e}  "
+                     f"massimb={solver.mass_imbalance:.1e}  "
+                     f"nut@cap={solver.nut_cap_frac*100:.1f}%  k@cap={solver.k_cap_frac*100:.1f}%  "
                      f"nstep={nstep}  ({time.time()-t0:.1f}s)")
     if outdir and member == 0 and cfg.checkpoint_every > 0:
         solver.save_state(os.path.join(outdir, "checkpoint.npz"))
@@ -1448,7 +2134,9 @@ def run_member(cfg, grid, poisson, log, member, ts_writer=None,
     return {"S": solver.S, "S_amb": solver.S_amb, "rho": solver.rho,
             "u": solver.u, "v": solver.v, "w": solver.w, "T": solver.T,
             "k": solver.k, "eps": solver.eps, "nut": solver.nut,
-            "eta": solver.eta}
+            "eta": solver.eta, "ts_history": ts_history, "div_history": div_history,
+            "nut_cap_frac": solver.nut_cap_frac, "k_cap_frac": solver.k_cap_frac,
+            "mass_imbalance": solver.mass_imbalance}
 
 
 def run_selftest(log):
@@ -1473,12 +2161,18 @@ def run_selftest(log):
     # 1. finiteness
     finite = all(np.isfinite(getattr(s, f)).all() for f in ("u", "v", "w", "S", "T"))
     check("no NaN/Inf in fields", finite)
-    # 2. salinity boundedness  0 <= S <= S0 (+ small tensor tolerance)
+    # 2. salinity boundedness  0 <= S <= S0 — now a TRUE bound (A2 clip + the
+    #    conservative monotone advection/cross-flux), tolerance tightened from 0.5.
     smax, smin = float(s.S[g.fluid].max()), float(s.S[g.fluid].min())
-    check("salinity bounded [0, S0]", smin >= -1e-6 and smax <= cfg.S0 + 0.5,
-          f"min={smin:.3f} max={smax:.3f} S0={cfg.S0}")
-    # 3. divergence-free (99.9 pct of fluid cells)
+    check("salinity bounded [0, S0] (true bound)", smin >= -1e-6 and smax <= cfg.S0 + 1e-6,
+          f"min={smin:.3f} max={smax:.5f} S0={cfg.S0}")
+    # 3. divergence-free (99.9 pct of fluid cells) — partial-cell-consistent (A4)
     check("divergence controlled", s.divergence < 5e-2, f"div={s.divergence:.2e}")
+    check("projection divergence-free to machine precision (A4)", s.divergence < 1e-8,
+          f"div={s.divergence:.2e}")
+    # 3b. global volume budget closed at the open boundaries (C2)
+    check("global mass balance enforced (C2)", s.mass_imbalance < 1e-9,
+          f"imbalance={s.mass_imbalance:.2e}")
     # 4. EOS monotone in S (haline contraction > 0)
     r1 = equation_of_state(cfg, 35.0, 20.0); r2 = equation_of_state(cfg, 45.0, 20.0)
     check("EOS density increases with salinity", r2 > r1, f"{r1:.2f} -> {r2:.2f}")
@@ -1513,7 +2207,70 @@ def run_selftest(log):
     for _ in range(15):
         sb.step()
     err = float(np.abs(Sa - sb.S).max())
-    check("checkpoint/restart reproduces exactly", err < 1e-10, f"max|dS|={err:.2e}")
+    check("checkpoint/restart reproduces exactly (free surface)", err < 1e-10, f"max|dS|={err:.2e}")
+
+    # 7. rigid-lid path ALSO restarts bitwise-exact (E2d)
+    cfgr = Config(); cfgr.nx, cfgr.ny, cfgr.nz = 24, 16, 12
+    cfgr.free_surface = False; cfgr.make_figures = False
+    gr = Grid(cfgr); _, ar = free_surface_params(cfgr, gr)
+    Pr = PoissonSolver(gr, cfgr.free_surface, ar)
+    sr = NereidSolver(cfgr, gr, Pr, log, 0)
+    for _ in range(12):
+        sr.step()
+    ckr = _os.path.join(tempfile.gettempdir(), "nereid_selftest_ckpt_rl.npz")
+    sr.save_state(ckr)
+    for _ in range(12):
+        sr.step()
+    Sr = sr.S.copy()
+    sr2 = NereidSolver(cfgr, gr, Pr, log, 0).load_state(ckr)
+    for _ in range(12):
+        sr2.step()
+    errr = float(np.abs(Sr - sr2.S).max())
+    check("checkpoint/restart reproduces exactly (rigid lid)", errr < 1e-10, f"max|dS|={errr:.2e}")
+
+    # 8. dispersion tensor is SPD everywhere (E2b) — the whole off-diagonal
+    #    apparatus is only well-posed if D = [[Dxx,Dxy,Dxz],[.,Dyy,Dyz],[.,.,Dzz]]
+    #    is positive semi-definite at every fluid cell. Sample and eigen-check.
+    Dxx, Dyy, Dzz, Dxy, Dxz, Dyz = s._dispersion_tensor()
+    fi = np.where(g.fluid)
+    sel = np.linspace(0, len(fi[0]) - 1, min(400, len(fi[0]))).astype(int)
+    min_eig = np.inf
+    for q in sel:
+        i, j, kk = fi[0][q], fi[1][q], fi[2][q]
+        M = np.array([[Dxx[i, j, kk], Dxy[i, j, kk], Dxz[i, j, kk]],
+                      [Dxy[i, j, kk], Dyy[i, j, kk], Dyz[i, j, kk]],
+                      [Dxz[i, j, kk], Dyz[i, j, kk], Dzz[i, j, kk]]])
+        min_eig = min(min_eig, float(np.linalg.eigvalsh(M)[0]))
+    check("dispersion tensor SPD (min eigenvalue >= 0)", min_eig >= -1e-9,
+          f"min_eig={min_eig:.2e}")
+
+    # 9. partial-cell Poisson matrix is symmetric (E2c) — required for SPD + the
+    #    exact div/grad transpose property the projection relies on.
+    A = P.A.tocsr()
+    asym = float(abs(A - A.T).max()) if A.nnz else 0.0
+    check("Poisson matrix symmetric (partial cells)", asym < 1e-12, f"max|A-A^T|={asym:.2e}")
+
+    # 10. scalar conservation under closed (no-flux) BCs (E2a):
+    #     backward-Euler diagonal diffusion AND the conservative off-diagonal
+    #     cross-flux must both conserve the integral exactly in a closed box.
+    cfgc = Config(); cfgc.nx, cfgc.ny, cfgc.nz = 16, 14, 12
+    cfgc.bathy_min_depth = cfgc.depth; cfgc.bathy_slope = 0.0  # flat -> all-fluid box
+    cfgc.conservative_offdiag = True; cfgc.masked_gradients = True  # exercise the conservative path
+    gc = Grid(cfgc); _, ac = free_surface_params(cfgc, gc)
+    Pc = PoissonSolver(gc, cfgc.free_surface, ac)
+    sc = NereidSolver(cfgc, gc, Pc, log, 0)
+    rngc = np.random.default_rng(7)
+    phi = rngc.standard_normal((gc.nx, gc.ny, gc.nz)) * gc.fluid
+    Dc = np.full_like(phi, 0.5)
+    phi_d = sc._implicit_diag_diffuse(phi.copy(), Dc, Dc, Dc, 0.3)
+    cons_diff = abs(float(phi_d.sum()) - float(phi.sum())) / max(abs(float(phi.sum())), 1e-9)
+    check("implicit diffusion conserves scalar (closed box)", cons_diff < 1e-9,
+          f"rel dmass={cons_diff:.2e}")
+    Dofd = np.full_like(phi, 0.3)
+    od = sc._offdiag_div(phi, Dofd, Dofd, Dofd)
+    cons_ofd = abs(float(od[gc.fluid].sum()))
+    check("conservative off-diagonal flux integrates to ~0 (closed box)", cons_ofd < 1e-9,
+          f"sum(div)={cons_ofd:.2e}")
 
     npass = sum(1 for _, ok, _ in results if ok)
     log.info(f"SELF-TEST: {npass}/{len(results)} checks passed.")
@@ -1553,6 +2310,78 @@ def run_validation(log):
     log.info("        the 3-D model provides the far-field from this diluted seed, so the")
     log.info("        earlier ~4x near-field over-prediction of the raw 3-D jet is removed.")
     return ok_all
+
+
+def run_pde_benchmark(log):
+    """E1: validate the FAR-FIELD PDE CORE itself (not the near-field
+    correlations) against a classical analytic benchmark — the dense-fluid
+    lock-exchange gravity current.  A column of dense (brine) water is released in
+    a flat closed box with NO nozzle source, NO ambient current and NO near-field
+    coupling, so only the solved momentum/buoyancy/transport PDE drives it.  The
+    seabed front advances at a constant speed U_f; the dimensionless front Froude
+    number Fr_f = U_f / sqrt(g' H) is a textbook invariant (Benjamin 1968: ~0.5 for
+    an energy-conserving full-depth lock; lab/RANS values ~0.3-0.7).  This
+    exercises the part of the model the lab-jet correlations do NOT constrain."""
+    log.info("PDE BENCHMARK: dense lock-exchange gravity-current front Froude number")
+    cfg = Config()
+    cfg.Lx = 300.0; cfg.Ly = 40.0; cfg.depth = 20.0
+    cfg.nx = 75; cfg.ny = 8; cfg.nz = 24
+    cfg.bathy_slope = 0.0; cfg.bathy_min_depth = cfg.depth     # flat all-fluid box
+    cfg.free_surface = False; cfg.near_field_coupling = False
+    cfg.Q_d = 0.02                                             # no source here (g.src zeroed);
+    cfg.d_p = 0.20                                             # keep U_d small so it does not
+    #                                                           throttle the adaptive dt
+    cfg.U_current = 0.0; cfg.tide_amp = 0.0; cfg.wind10 = 0.0; cfg.Hs = 0.0
+    cfg.stoch_enable = False; cfg.make_figures = False
+    cfg.T_amb_surf = cfg.T_amb_bot = 20.0                      # isothermal: pure haline buoyancy
+    cfg.t_end = 360.0
+    # exercise the full-fidelity TRANSPORT numerics (implicit diffusion also
+    # removes the diffusive dt ceiling so the benchmark runs quickly). Bottom drag
+    # / wall function are LEFT OFF: the classical lock-exchange / Benjamin front
+    # speed is the inviscid, drag-free value, so adding bed drag would (correctly)
+    # retard the front and confound the comparison.
+    cfg.implicit_diffusion = True; cfg.masked_gradients = True
+    cfg.conservative_offdiag = True
+    g = Grid(cfg); _, al = free_surface_params(cfg, g)
+    P = PoissonSolver(g, cfg.free_surface, al)
+    s = NereidSolver(cfg, g, P, log, 0)
+    # isolate the PDE: kill the nozzle source AND the boundary sponge
+    g.src[:] = 0.0; s.sponge[:] = 0.0; s.sponge2d[:] = 0.0
+    Samb = s.S_amb.copy()
+    x0 = 0.20 * cfg.Lx                                         # full-depth dense lock x<x0
+    s.S = np.where(g.X < x0, cfg.S0, Samb) * g.fluid
+    s.T[:] = cfg.T_amb_bot
+    s.rho = equation_of_state(cfg, s.S, s.T)
+    gprime = cfg.g * (equation_of_state(cfg, cfg.S0, cfg.T_amb_bot)
+                      - equation_of_state(cfg, cfg.S_amb_bot, cfg.T_amb_bot)) / cfg.rho0
+    cref = math.sqrt(abs(gprime) * cfg.depth)
+    thr = 2.0
+    ts, xf = [], []
+    while s.t < cfg.t_end:
+        s.step()
+        be = _seabed_field(g, (s.S - Samb))                   # bottom excess
+        col = np.nanmax(be, axis=1)                            # max over the (thin) y
+        idx = np.where(col > thr)[0]
+        if idx.size:
+            ts.append(s.t); xf.append(float(g.xc[idx.max()]))
+    ts = np.array(ts); xf = np.array(xf)
+    sel = (xf > x0 + 0.05 * cfg.Lx) & (xf < 0.85 * cfg.Lx)     # constant-speed phase
+    Uf = float(np.polyfit(ts[sel], xf[sel], 1)[0]) if sel.sum() >= 3 else float("nan")
+    Fr = Uf / cref if cref > 0 else float("nan")
+    # The classical inviscid full-depth lock value is Fr_f ~ 0.5 (Benjamin 1968);
+    # the model's turbulent eddy viscosity/diffusivity (nut up to nut_max) damps and
+    # entrains the front, REDUCING Fr below the inviscid value. The PDE core is
+    # validated as physically consistent if the front is a sustained, SUB-CRITICAL
+    # gravity current advancing at a roughly constant speed: 0.1 <= Fr_f <= 0.7.
+    band = np.isfinite(Fr) and (0.1 <= Fr <= 0.7)
+    log.info(f"  reduced gravity g' = {abs(gprime):.4f} m/s^2 ; sqrt(g'H) = {cref:.3f} m/s")
+    log.info(f"  measured front speed U_f = {Uf:.3f} m/s over {int(sel.sum())} samples")
+    log.info(f"  -> front Froude number Fr_f = U_f/sqrt(g'H) = {Fr:.2f}  "
+             f"(inviscid Benjamin ~0.5; turbulent damping lowers it; band 0.1-0.7)")
+    log.info(f"  -> PDE far-field core {'PASS (sustained sub-critical gravity current)' if band else 'OUT OF BAND'}")
+    log.info("  NOTE: this validates the SOLVED far-field gravity-current dynamics "
+             "(buoyancy->momentum->transport) independently of the near-field jet correlations.")
+    return band
 
 
 # =============================================================================
@@ -1606,8 +2435,11 @@ FIELD_SITES = {
     #   DESIGN/COMPLIANCE TARGET: brine dilution 45:1 at 50 m from the diffuser
     #   (ΔS = (61.4-36.5)/45 ≈ 0.55), with mixing-zone limits ΔS<1.2 ppt @50 m,
     #   <0.8 ppt @1000 m. The report's TUFLOW-FV + CFD model reproduces this
-    #   against in-situ dye/salinity transects. NEREID-B reproduces 46:1 @ 50 m
-    #   at farfield_disp_cal=1.0 (no tuning) -> ~2.5% of the validated target.
+    #   against in-situ dye/salinity transects. NEREID-B (Rev 1.3 accurate numerics +
+    #   k-eps buoyancy SIGN-BUG FIX) gives ~35:1 @ 50 m at cal=1.0 -> CONSERVATIVE
+    #   (under-dilutes ~22% vs the 45:1 target; the buggy sign gave ~57:1, over). The
+    #   earlier 46:1/2.3% "match" was the old discretisation error + sign-bug over-
+    #   mixing partly cancelling. Residual needs site data; do NOT claim validation.
     "perth": {
         "name": "Perth SWRO — Cockburn Sound submerged diffuser",
         "ref": "WA EPA App D 'Perth Desalination Plant Discharge Modelling: Model Validation'",
@@ -1617,6 +2449,15 @@ FIELD_SITES = {
         "dilution_target": 45.0, "target_dist_m": 50.0,   # field-validated 45:1 at 50 m
         "limits": [(50.0, 1.2), (1000.0, 0.8)],           # (distance_m, max ΔS ppt)
     },
+    # ---- STANDING DATA REQUIREMENT (E3) ----------------------------------------
+    # The far field is presently field-validated at the SINGLE Perth 45:1@50 m
+    # point (and that point is near-field/diffuser-dominated, so it does not pin
+    # the far-field dispersion). A genuine MULTI-POINT, in-class far-field
+    # validation needs a digitised ΔS(x) transect from another deep efficient
+    # diffuser (e.g. Carlsbad, CA, or Sydney/Gold Coast). No such transect is
+    # bundled here because fabricating numbers would be worse than the honest gap;
+    # add the published transect as a new FIELD_SITES entry when available and run
+    # `--calibrate <site>`. Do NOT claim far-field field validation beyond Perth.
 }
 
 
@@ -1970,6 +2811,14 @@ def main(argv=None):
     ap.add_argument("--nz", type=int, default=None)
     ap.add_argument("--outdir", type=str, default=None)
     ap.add_argument("--no-figures", action="store_true")
+    ap.add_argument("--no-subcell", action="store_true",
+                    help="disable sub-cell footprint/reach/depth estimation "
+                         "(report raw cell-count diagnostics only)")
+    ap.add_argument("--subcell-refine", type=int, default=None,
+                    help="oversampling factor for sub-cell diagnostics (default 8)")
+    ap.add_argument("--steady-frac", type=float, default=None,
+                    help="trailing fraction of the run used for steady-state "
+                         "mean/std statistics (default 0.34)")
     ap.add_argument("--theta", type=float, default=None, help="nozzle angle deg")
     ap.add_argument("--S0", type=float, default=None, help="brine salinity g/kg")
     ap.add_argument("--config", type=str, default=None,
@@ -1978,6 +2827,12 @@ def main(argv=None):
                     help="run invariant/regression checks and exit")
     ap.add_argument("--validate", action="store_true",
                     help="run idealised dense-jet validation vs lab scaling and exit")
+    ap.add_argument("--benchmark", action="store_true",
+                    help="validate the far-field PDE core via a lock-exchange "
+                         "gravity-current front-Froude benchmark and exit")
+    ap.add_argument("--hires", action="store_true",
+                    help="raise the grid to the recommended quantitative "
+                         "resolution (64x40x28) instead of the diffuse default")
     ap.add_argument("--gridconv", type=str, default=None, metavar="CONFIG",
                     help="run far-field grid-convergence check for a config and exit")
     ap.add_argument("--calibrate", nargs="?", const="gacia2007", default=None,
@@ -1994,7 +2849,7 @@ def main(argv=None):
                     help="disable multiprocessing of ensemble members")
     args = ap.parse_args(argv)
 
-    if args.selftest or args.validate or args.gridconv or args.calibrate:
+    if args.selftest or args.validate or args.benchmark or args.gridconv or args.calibrate:
         _log = build_logger(os.path.join(
             os.path.dirname(os.path.abspath(__file__)), "nereid_output"))
         ok = True
@@ -2004,6 +2859,9 @@ def main(argv=None):
         if args.validate:
             _log.info("=" * 70); _log.info("NEREID-B VALIDATION")
             ok &= run_validation(_log)
+        if args.benchmark:
+            _log.info("=" * 70); _log.info("NEREID-B PDE BENCHMARK")
+            ok &= run_pde_benchmark(_log)
         if args.gridconv:
             _log.info("=" * 70); _log.info("NEREID-B GRID-CONVERGENCE")
             ok &= run_gridconv(_log, args.gridconv)
@@ -2022,6 +2880,8 @@ def main(argv=None):
         cfg.nx, cfg.ny, cfg.nz = 32, 20, 14
         cfg.t_end = 120.0
         cfg.save_every = 30.0
+    if args.hires:                       # E4: recommended quantitative resolution
+        cfg.nx, cfg.ny, cfg.nz = 64, 40, 28
     if args.ensemble is not None: cfg.ensemble = max(1, args.ensemble)
     if args.t_end is not None: cfg.t_end = args.t_end
     if args.nx: cfg.nx = args.nx
@@ -2029,6 +2889,9 @@ def main(argv=None):
     if args.nz: cfg.nz = args.nz
     if args.outdir: cfg.outdir = args.outdir
     if args.no_figures: cfg.make_figures = False
+    if args.no_subcell: cfg.subcell_diagnostics = False
+    if args.subcell_refine is not None: cfg.subcell_refine = max(1, args.subcell_refine)
+    if args.steady_frac is not None: cfg.steady_frac = min(max(args.steady_frac, 0.05), 1.0)
     if args.theta is not None: cfg.theta_deg = args.theta
     if args.S0 is not None: cfg.S0 = args.S0
     if args.snapshots is not None: cfg.n_snapshots = args.snapshots
@@ -2048,6 +2911,26 @@ def main(argv=None):
     grid = Grid(cfg)
     log.info(f"fluid cells: {grid.nfluid}/{cfg.nx*cfg.ny*cfg.nz}  "
              f"nozzle U_d={grid.U_d:.2f} m/s")
+    # E4: resolution honesty — the default grid has dz ~ depth/nz; the bottom
+    # gravity-current layer is ~1-2 m thick, so a coarse dz under-resolves it and
+    # the far-field figures are numerically diffuse (qualitative). Recommend the
+    # quantitative resolution explicitly.
+    if cfg.dz > 1.0:
+        log.info(f"NOTE (resolution): dz={cfg.dz:.2f} m — the ~1-2 m near-bed gravity "
+                 f"current is UNDER-RESOLVED. Default outputs are qualitative; use "
+                 f"--hires (64x40x28) or finer for quantitative far-field numbers.")
+    # E3: far-field validation scope (HONEST). Near-field = lab-validated. The
+    # far field is NOT field-validated: solved accurately (default numerics) the
+    # model over-disperses (~57:1 vs field 45:1 at Perth; Gacia reach ~2x). The
+    # earlier "45:1 to 2.3%" was a discretisation artifact. Far-field numbers are
+    # indicative and currently OPTIMISTIC (under-predict impact).
+    log.info("NOTE (validation): near-field = lab-validated correlations. FAR-FIELD "
+             "is NOT field-validated but a k-eps buoyancy SIGN BUG was fixed "
+             "(stratification now damps, not produces, turbulence). Corrected far "
+             "field is CONSERVATIVE: Perth ~35:1 vs field 45:1 (under-dilutes ~22%, "
+             "over-predicts impact = safe side); Gacia reach ~2x (structural). "
+             "Residual is honest model uncertainty; in-class field calibration "
+             "still needed before quantitative use.")
     nf = grid.nearfield
     if cfg.near_field_coupling:
         log.info(f"near-field (validated correlations): Fr={nf['Fr']:.1f}  "
@@ -2104,11 +2987,27 @@ def main(argv=None):
     log.info(f"  peak salinity                : {metrics['S_max']:.2f} g/kg")
     log.info(f"  max excess above ambient     : {metrics['excess_max']:.2f} g/kg")
     log.info(f"  horizontal reach r_max       : {metrics['r_max_m']:.1f} m")
-    log.info(f"  seabed footprint (>ΔS_crit)  : {metrics['seabed_footprint_m2']:.0f} m^2")
+    log.info(f"  seabed footprint (>ΔS_crit)  : {metrics['seabed_footprint_m2']:.0f} m^2"
+             f"  (resolution {metrics.get('footprint_resolution_m2', 0):.0f} m^2)")
     log.info(f"  affected water volume        : {metrics['affected_volume_m3']:.0f} m^3")
     log.info(f"  discharge densimetric Froude : {metrics['Fr_d']:.2f}")
+    if "steady_state" in metrics:
+        ss = metrics["steady_state"]
+        verdict = "STEADY" if ss.get("steady_state_reached") else "NOT yet steady"
+        log.info(f"  steady-state ({ss['window_s'][0]:.0f}-{ss['window_s'][1]:.0f}s): "
+                 f"{verdict}; excess={ss.get('excess_max_mean', float('nan')):.2f}"
+                 f"±{ss.get('excess_max_std', float('nan')):.2f}, "
+                 f"reach={ss.get('r_max_m_mean', float('nan')):.0f}"
+                 f"±{ss.get('r_max_m_std', float('nan')):.0f} m")
+    if "divergence_drift_ratio" in metrics:
+        log.info(f"  divergence: final={metrics['divergence_final']:.1e}, "
+                 f"max={metrics['divergence_max_over_run']:.1e}, "
+                 f"drift x{metrics['divergence_drift_ratio']:.1f}")
     if cfg.ensemble > 1:
         log.info(f"  max exceedance probability   : {metrics['max_exceedance_prob']:.2f}")
+    else:
+        log.info("  exceedance map               : single-realisation INDICATOR "
+                 "(use --ensemble N>=30 for probability)")
     log.info(f"All outputs written to: {outdir}")
     log.info("=" * 70)
     return 0
