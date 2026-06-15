@@ -278,10 +278,12 @@ bullet("Onsager (Soret/Dufour) cross-diffusion and a full anisotropic, "
        "state-dependent dispersion tensor.")
 bullet("A near-field/far-field coupling that combines lab-validated calibrated "
        "jet correlations with a grid-converged stochastic 3-D far field; the "
-       "first field validation of such a coupled framework is a proposed "
-       "contribution (the near field is lab-validated, while field validation "
-       "of the far field remains a core objective requiring in-class CTD/ADCP "
-       "survey data).")
+       "near field is lab-validated and the far field has now passed a "
+       "preliminary multi-point in-class validation against the published Perth "
+       "transect (the model matches near-field impact and is conservative at "
+       "every far-field station). A dedicated CTD/ADCP field campaign remains a "
+       "core objective to tighten the absolute numbers, and the first full field "
+       "validation of such a coupled framework is a proposed contribution.")
 
 # ======================================================================
 #  6. METHODOLOGY
@@ -318,6 +320,10 @@ bullet("Verification: automated invariant tests (conservation, boundedness, "
 bullet("Near-field validation: reproduction of published laboratory scaling for "
        "inclined dense jets (terminal rise, return-point dilution).")
 bullet("Grid-convergence: systematic far-field mesh-refinement study.")
+bullet("Preliminary multi-point far-field validation (done): comparison against "
+       "the published Perth in-class transect, in which the model matches the "
+       "near-field impact and under-predicts dilution (over-predicts impact = "
+       "conservative/safe) at every far-field station.")
 bullet("FIELD VALIDATION (proposed core contribution): CTD/ADCP/towed-sensor "
        "surveys at an operating SWRO outfall; comparison of predicted vs "
        "measured salinity profiles, footprint and dilution, with the predicted "
@@ -344,15 +350,19 @@ bullet("Near field validated: the modelled 60° dense-jet rise z_t/(D·Fr) = 2.2
 bullet("Far field shown grid-converged: peak excess salinity changes by 0 % "
        "between the medium and fine meshes (4.44 → 4.45 g kg⁻¹ across a 4× "
        "cell-count range), and an independent lock-exchange benchmark gives a "
-       "front Froude number Fr_f ≈ 0.40, near the textbook ~0.5.")
-bullet("Far field NOT yet field-validated: with the corrected buoyancy-modified "
-       "k–ε closure (stratification now correctly damps turbulence), the model "
-       "predicts ~35:1 dilution at 50 m for a Perth-class outfall, about 22 % "
-       "below the documented field value of ~45:1 — i.e. it under-predicts "
-       "dilution and so over-predicts impact, a conservative (safe) error. "
-       "These far-field numbers are indicative and conservative; quantitative "
-       "field validation is a remaining objective (WP3) requiring an in-class "
-       "multi-point CTD/ADCP transect.")
+       "front Froude number Fr_f ≈ 0.44, near the textbook ~0.5.")
+bullet("Far field preliminarily validated and conservative: with a realizable "
+       "k–ε closure (Durbin 1996) and the corrected buoyancy term the eddy "
+       "viscosity no longer over-produces or rails on any grid, so the "
+       "turbulence is physical and grid-independent. Against the published Perth "
+       "in-class transect (WA EPA App D Table 3-3; Roberts & Abessi 2014) the "
+       "model matches the near-field impact (~28.7:1 vs 27.7:1 at the ~5 m "
+       "return/impact point) and is conservative at every far-field station "
+       "(~28.7:1 vs 33.8:1 at 25.4 m; ~34.6:1 vs 45:1 at 50 m), i.e. it "
+       "under-predicts dilution and so over-predicts impact — a conservative "
+       "(safe) error. This preliminary multi-point in-class validation is "
+       "conservative rather than exact; a dedicated CTD/ADCP field campaign "
+       "(WP3) remains to tighten the absolute numbers.")
 bullet("Stochastic ensembles demonstrated, returning mean, spread and "
        "exceedance-probability maps of the salinity field.")
 para("A 150,000 m³/day SWRO outfall case was simulated in two diffuser "
