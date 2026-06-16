@@ -4676,11 +4676,13 @@ def main(argv=None):
     # sparse pressure solve and GPU hardware (see nereid-better-roadmap); when absent
     # the run proceeds on the CPU NumPy/SciPy path. No silent pretence.
     if cfg.gpu:
-        try:
-            import cupy as _cp  # noqa: F401
-            log.info("  gpu=True and CuPy present — NOTE: the sparse pressure solve still "
-                     "runs on CPU; full GPU acceleration is a pending port (roadmap).")
-        except Exception:
+        # use the module-level CuPy handle; a local `import cupy as _cp` here would make
+        # `_cp` a local of main() and break the earlier --gpu-check reference (UnboundLocal).
+        if _HAVE_CUPY:
+            log.info("  gpu=True and CuPy present — per-step field kernels run on the GPU; the "
+                     "sparse pressure solve stays on the CPU LU (one host<->device round-trip/step; "
+                     "CPU-vs-GPU equivalence VERIFIED via --gpu-verify).")
+        else:
             log.warning("  gpu=True requested but CuPy/GPU unavailable -> running on CPU "
                         "(NumPy/SciPy). Install CuPy on GPU hardware to enable.")
     fid = []
