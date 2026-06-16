@@ -1,0 +1,56 @@
+{
+  "_case": "Perth Seawater Desalination Plant (Stage 1) — Cockburn Sound submerged brine diffuser",
+  "_provenance": "WA EPA App-D 'Perth Desalination Plant Discharge Modelling: Model Validation'; ~45 GL/yr, 45% recovery; ~163 m double-tee diffuser, 40 ports x 0.13 m at 60 deg; total ~2.51 m3/s; ambient 36.5 psu; discharge 61.4 psu; design target 45:1 dilution at 50 m; mixing-zone limits dS<1.2 ppt @50 m, <0.8 ppt @1000 m.",
+
+  "S0": 61.4,
+  "T_b": 25.0,
+  "Q_d": 0.0628,
+  "d_p": 0.13,
+  "theta_deg": 60.0,
+  "psi_deg": 0.0,
+  "n_ports": 40,
+  "port_spacing": 4.1,
+  "nozzle_height": 1.0,
+
+  "S_amb_surf": 36.5,
+  "S_amb_bot": 36.7,
+  "T_amb_surf": 21.0,
+  "T_amb_bot": 19.0,
+
+  "U_current": 0.08,
+  "tide_amp": 0.03,
+  "tide_period": 44712.0,
+  "Hs": 0.8,
+  "Tw": 6.0,
+  "latitude_deg": -32.2,
+  "wind10": 6.0,
+  "wind_dir_deg": 0.0,
+
+  "depth": 10.0,
+  "bathy_min_depth": 9.0,
+  "bathy_slope": 0.005,
+  "Lx": 180.0,
+  "Ly": 90.0,
+  "nx": 36,
+  "ny": 22,
+  "nz": 14,
+  "x_src_frac": 0.18,
+  "y_src_frac": 0.5,
+
+  "near_field_coupling": true,
+  "free_surface": false,
+
+  "dS_crit": 1.2,
+
+  "stoch_enable": true,
+  "stoch_sigma": 0.02,
+  "stoch_length": 25.0,
+  "ensemble": 4,
+  "seed": 20240601,
+
+  "t_end": 280.0,
+  "save_every": 20.0,
+  "make_figures": true,
+  "n_snapshots": 0,
+  "outdir": "5"
+}

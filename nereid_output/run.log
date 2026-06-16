@@ -1,132 +1,16 @@
-20:17:35  ======================================================================
-20:17:35  NEREID-B solver starting
-20:17:35  grid 48x30x20  domain 400.0x200.0x30.0 m  t_end=600.0s  ensemble=1
-20:17:35  fluid cells: 19200/28800  nozzle U_d=7.96 m/s
-20:17:35  NOTE (resolution): dz=1.50 m — the ~1-2 m near-bed gravity current is UNDER-RESOLVED. Default outputs are qualitative; use --hires (64x40x28) or finer for quantitative far-field numbers.
-20:17:35  NOTE (validation): near-field = lab-validated correlations. Turbulence now physical (k-eps buoyancy SIGN BUG fixed + REALIZABLE k-eps -> no nut railing on any grid). FAR-FIELD is CONSERVATIVE and validated to be so across the published Perth multi-point transect (--validate-farfield): Perth ~35:1 vs documented 45:1 (under-dilutes ~22% = over-predicts impact = safe). Gacia reach ~2x (structural). Absolute far-field numbers are indicative; a CTD/ADCP survey at the modelled outfall would tighten them.
-20:17:35  near-field (validated correlations): Fr=40.1  rise=17.7m (z_t/D·Fr=2.20)  return=19.3m  dilution=64x
-20:17:35    -> 3-D far field seeded with diluted plume S=36.75 g/kg
-20:17:35  assembling & factorising pressure-Poisson operator ...
-20:17:45  factorisation complete.
-20:17:45  --- ensemble member 1/1 (in-process, full diagnostics) ---
-20:18:29  [m0] t=   27.2s  dt=0.136  Smax=36.75  div=1.7e-16  massimb=1.2e-16  nut@cap=0.0%  k@cap=0.0%  nstep=200  (44.6s)
-20:19:06  [m0] t=   54.4s  dt=0.136  Smax=36.75  div=1.8e-16  massimb=0.0e+00  nut@cap=0.0%  k@cap=0.0%  nstep=400  (81.3s)
-20:19:41  [m0] t=   81.6s  dt=0.136  Smax=36.75  div=2.0e-16  massimb=7.4e-16  nut@cap=0.0%  k@cap=0.0%  nstep=600  (115.9s)
-20:20:34  [m0] t=  108.8s  dt=0.136  Smax=36.75  div=1.9e-16  massimb=2.5e-16  nut@cap=0.0%  k@cap=0.0%  nstep=800  (169.3s)
-20:21:17  [m0] t=  136.0s  dt=0.136  Smax=36.75  div=2.0e-16  massimb=0.0e+00  nut@cap=0.0%  k@cap=0.0%  nstep=1000  (211.6s)
-20:21:53  [m0] t=  163.2s  dt=0.136  Smax=36.75  div=1.9e-16  massimb=1.2e-16  nut@cap=0.0%  k@cap=0.0%  nstep=1200  (248.1s)
-20:22:29  [m0] t=  190.4s  dt=0.136  Smax=36.75  div=2.0e-16  massimb=2.4e-16  nut@cap=0.0%  k@cap=0.0%  nstep=1400  (284.6s)
-20:23:07  [m0] t=  217.6s  dt=0.136  Smax=36.75  div=2.2e-16  massimb=8.5e-16  nut@cap=0.0%  k@cap=0.0%  nstep=1600  (322.0s)
-20:23:42  [m0] t=  244.8s  dt=0.136  Smax=36.75  div=2.5e-16  massimb=0.0e+00  nut@cap=0.0%  k@cap=0.0%  nstep=1800  (357.2s)
-20:24:19  [m0] t=  272.0s  dt=0.136  Smax=36.75  div=3.0e-16  massimb=1.2e-16  nut@cap=0.0%  k@cap=0.0%  nstep=2000  (393.8s)
-20:24:54  [m0] t=  299.2s  dt=0.136  Smax=36.75  div=3.0e-16  massimb=2.4e-16  nut@cap=0.0%  k@cap=0.0%  nstep=2200  (429.0s)
-20:25:36  [m0] t=  326.4s  dt=0.136  Smax=36.75  div=2.9e-16  massimb=2.4e-16  nut@cap=0.0%  k@cap=0.0%  nstep=2400  (471.0s)
-20:26:28  [m0] t=  353.6s  dt=0.136  Smax=36.75  div=3.2e-16  massimb=6.0e-16  nut@cap=0.0%  k@cap=0.0%  nstep=2600  (523.2s)
-20:27:17  [m0] t=  380.8s  dt=0.136  Smax=36.75  div=3.4e-16  massimb=3.6e-16  nut@cap=0.0%  k@cap=0.0%  nstep=2800  (572.6s)
-20:28:07  [m0] t=  408.0s  dt=0.136  Smax=36.75  div=3.7e-16  massimb=2.4e-16  nut@cap=0.0%  k@cap=0.0%  nstep=3000  (621.7s)
-20:28:43  [m0] t=  435.2s  dt=0.136  Smax=36.75  div=4.8e-16  massimb=6.0e-16  nut@cap=0.0%  k@cap=0.0%  nstep=3200  (658.1s)
-20:29:22  [m0] t=  462.4s  dt=0.136  Smax=36.75  div=5.1e-16  massimb=1.2e-16  nut@cap=0.1%  k@cap=0.0%  nstep=3400  (697.0s)
-20:29:59  [m0] t=  489.6s  dt=0.136  Smax=36.75  div=5.6e-16  massimb=8.4e-16  nut@cap=3.3%  k@cap=0.0%  nstep=3600  (734.0s)
-20:30:35  [m0] t=  516.9s  dt=0.136  Smax=36.75  div=5.2e-16  massimb=3.6e-16  nut@cap=7.5%  k@cap=0.0%  nstep=3800  (769.9s)
-20:31:14  [m0] t=  544.1s  dt=0.136  Smax=36.75  div=4.6e-16  massimb=3.6e-16  nut@cap=13.9%  k@cap=0.0%  nstep=4000  (809.3s)
-20:31:55  [m0] t=  571.3s  dt=0.136  Smax=36.75  div=4.2e-16  massimb=8.4e-16  nut@cap=19.3%  k@cap=0.0%  nstep=4200  (850.4s)
-20:32:35  [m0] t=  598.5s  dt=0.136  Smax=36.75  div=4.3e-16  massimb=8.3e-16  nut@cap=24.0%  k@cap=0.0%  nstep=4400  (890.4s)
-20:32:37  [m0] done: 4412 steps, t=600.1s, wall=892.4s
-20:32:37  writing outputs ...
-20:32:37  NOTE: ensemble=1 -> 'exceedance' map is a single-realisation INDICATOR (0/1), not a probability. Use --ensemble N (N>=30) for a genuine probabilistic compliance field.
-20:32:37  Headline metrics: {
-  "S_max": 36.74697392819173,
-  "excess_max": 0.7393806425484755,
-  "dilution_min": 39.211873197098456,
-  "footprint_resolution_m2": 55.555555555555564,
-  "reach_resolution_m": 8.333333333333334,
-  "depth_resolution_m": 1.5,
-  "r_max_m": 0.0,
-  "z_deepest_m": 0.0,
-  "plume_top_m": 0.0,
-  "seabed_footprint_m2": 0.0,
-  "affected_volume_m3": 0.0,
-  "plume_rise_m": 0.0,
-  "return_point_dist_m": 0.0,
-  "Fr_d": 40.126335236466915,
-  "n_ensemble": 1,
-  "max_exceedance_prob": 0.0,
-  "nf_rise_m": 17.655587504045446,
-  "nf_rise_ratio": 2.2000000000000006,
-  "nf_return_dist_m": 19.26064091350412,
-  "nf_return_dilution": 64.20213637834706,
-  "nf_merge_factor": 1.0,
-  "nf_n_ports": 1,
-  "near_field_coupling": true,
-  "nf_dilution_band": [
-    62.19581961652372,
-    70.2210866638171
-  ],
-  "steady_state": {
-    "window_s": [
-      420.0093378103947,
-      600.0910616642966
-    ],
-    "n_samples": 4,
-    "converged": {
-      "S_max": true,
-      "excess_max": true,
-      "r_max_m": true,
-      "z_deepest_m": true,
-      "seabed_footprint_m2": true,
-      "dilution_min": true
-    },
-    "S_max_mean": 36.747011291548006,
-    "S_max_std": 2.1678522191507135e-05,
-    "excess_max_mean": 0.7394840055285972,
-    "excess_max_std": 6.021572594168683e-05,
-    "r_max_m_mean": 0.0,
-    "r_max_m_std": 0.0,
-    "z_deepest_m_mean": 0.0,
-    "z_deepest_m_std": 0.0,
-    "seabed_footprint_m2_mean": 0.0,
-    "seabed_footprint_m2_std": 0.0,
-    "dilution_min_mean": 39.20639253249922,
-    "dilution_min_std": 0.003192837103471347,
-    "steady_state_reached": true
-  },
-  "divergence_final": 3.7062670640853725e-16,
-  "divergence_max_over_run": 4.600264667895829e-16,
-  "divergence_drift_ratio": 0.9546505600958105,
-  "nut_cap_fraction": 0.24229166666666666,
-  "k_cap_fraction": 0.0,
-  "mass_imbalance_final": 1.1917654348110582e-16,
-  "eta_min_m": -0.24440523043395884,
-  "eta_max_m": 0.2953111651226061,
-  "eta_absmax_m": 0.2953111651226061,
-  "exceedance_is_probability": false,
-  "active_physics": {
-    "osmotic_flux": true,
-    "osmotic_body_force": false,
-    "soret_cross_diffusion": true,
-    "full_tensor_dispersion": true,
-    "stochastic_forcing": true,
-    "free_surface": true,
-    "near_field_coupling": true
-  },
-  "vprofile_x_m": 129.16666666666669,
-  "vprofile_y_m": 103.33333333333334
-}
-20:32:41  ======================================================================
-20:32:41  PREDICTION SUMMARY:
-20:32:41    -- near field (validated correlations) --
-20:32:41    terminal rise height         : 17.7 m  (z_t/D·Fr=2.20)
-20:32:41    return-point distance        : 19.3 m
-20:32:41    near-field (return) dilution : 64 x
-20:32:41    -- far field (3-D PDE model) --
-20:32:41    peak salinity                : 36.75 g/kg
-20:32:41    max excess above ambient     : 0.74 g/kg
-20:32:41    horizontal reach r_max       : 0.0 m
-20:32:41    seabed footprint (>ΔS_crit)  : 0 m^2  (resolution 56 m^2)
-20:32:41    affected water volume        : 0 m^3
-20:32:41    discharge densimetric Froude : 40.13
-20:32:41    steady-state (420-600s): STEADY; excess=0.74±0.00, reach=0±0 m
-20:32:41    divergence: final=3.7e-16, max=4.6e-16, drift x1.0
-20:32:41    exceedance map               : single-realisation INDICATOR (use --ensemble N>=30 for probability)
-20:32:41  All outputs written to: /home/akosa/salinity_prediction/nereid_output
-20:32:41  ======================================================================
+17:58:51  ======================================================================
+17:58:51  NEREID-B SELF-TEST
+17:59:16    [PASS] no NaN/Inf in fields  
+17:59:16    [PASS] salinity bounded [0, S0] (true bound)  min=36.011 max=36.74703 S0=65.0
+17:59:16    [PASS] divergence controlled  div=2.61e-17
+17:59:16    [PASS] projection divergence-free to machine precision (A4)  div=2.61e-17
+17:59:16    [PASS] global mass balance enforced (C2)  imbalance=1.37e-16
+17:59:16    [PASS] EOS density increases with salinity  1024.62 -> 1032.41
+17:59:16    [PASS] TVD advection non-amplifying  max=1.000000 (monotone)
+17:59:23    [PASS] checkpoint/restart reproduces exactly (free surface)  max|dS|=0.00e+00
+17:59:29    [PASS] checkpoint/restart reproduces exactly (rigid lid)  max|dS|=0.00e+00
+17:59:29    [PASS] dispersion tensor SPD (min eigenvalue >= 0)  min_eig=1.76e-03
+17:59:29    [PASS] Poisson matrix symmetric (partial cells)  max|A-A^T|=0.00e+00
+17:59:29    [PASS] implicit diffusion conserves scalar (closed box)  rel dmass=2.04e-16
+17:59:29    [PASS] conservative off-diagonal flux integrates to ~0 (closed box)  sum(div)=4.16e-17
+17:59:29  SELF-TEST: 13/13 checks passed.

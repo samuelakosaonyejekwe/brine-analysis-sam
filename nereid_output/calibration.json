@@ -1,31 +1,31 @@
 {
-  "site": "Perth SWRO \u2014 Cockburn Sound submerged diffuser",
-  "reference": "WA EPA App D 'Perth Desalination Plant Discharge Modelling: Model Validation'",
+  "site": "USER CTD/ADCP survey (perth_deep_ctd.csv)",
+  "reference": "5/perth_deep_ctd.csv",
   "method": "match brine dilution at target distance",
   "target_distance_m": 50.0,
   "dilution_target": 45.0,
   "dS_target_ppt": 0.5533333333333333,
   "verdict": "out_of_range",
-  "validation_error_pct": 20.9,
+  "validation_error_pct": 22.7,
   "modeled_dilution_range": [
-    34.20700695642586,
-    35.59778201653175
+    34.27569840455944,
+    34.79981688394853
   ],
   "samples_cal_dilution_dS": [
     [
       0.5,
-      34.20700695642586,
-      0.7250335344929273
+      34.27569840455944,
+      0.7235823724460899
     ],
     [
       1.0,
-      34.64090063928014,
-      0.7159565558492214
+      34.33894471773493,
+      0.722248020846331
     ],
     [
       2.0,
-      35.59778201653175,
-      0.6967162645559817
+      34.79981688394853,
+      0.7126866629385713
     ]
   ],
   "farfield_disp_cal": 1.0

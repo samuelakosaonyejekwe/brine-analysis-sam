@@ -1,0 +1,4 @@
+distance_m,dS_ppt,S0,S_amb,depth_m,U_current
+10,5.0,68,37.5,6,0.05
+20,2.5,,,,
+30,1.0,,,,

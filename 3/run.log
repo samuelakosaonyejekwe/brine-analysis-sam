@@ -1,0 +1,93 @@
+02:17:26  ======================================================================
+02:17:26  NEREID-B solver starting
+02:17:26  grid 48x30x20  domain 400.0x200.0x30.0 m  t_end=600.0s  ensemble=1
+02:17:26  fluid cells: 19200/28800  nozzle U_d=7.96 m/s
+02:17:26  near-field (validated correlations): Fr=40.1  rise=17.7m (z_t/D·Fr=2.20)  return=19.3m  dilution=64x
+02:17:26    -> 3-D far field seeded with diluted plume S=36.75 g/kg
+02:17:26  assembling & factorising pressure-Poisson operator ...
+02:17:34  factorisation complete.
+02:17:34  --- ensemble member 1/1 (in-process, full diagnostics) ---
+02:17:54  [m0] t=   13.2s  dt=0.066  Smax=36.75  div=1.2e-04  nstep=200  (20.0s)
+02:18:15  [m0] t=   26.4s  dt=0.066  Smax=36.77  div=1.3e-04  nstep=400  (41.5s)
+02:18:35  [m0] t=   39.6s  dt=0.066  Smax=36.99  div=1.3e-04  nstep=600  (61.3s)
+02:18:58  [m0] t=   52.8s  dt=0.066  Smax=37.78  div=1.5e-04  nstep=800  (84.0s)
+02:19:20  [m0] t=   66.0s  dt=0.066  Smax=38.23  div=1.4e-04  nstep=1000  (106.4s)
+02:19:40  [m0] t=   79.2s  dt=0.066  Smax=38.82  div=1.5e-04  nstep=1200  (126.2s)
+02:20:02  [m0] t=   92.4s  dt=0.066  Smax=39.06  div=1.6e-04  nstep=1400  (147.9s)
+02:20:23  [m0] t=  105.6s  dt=0.066  Smax=39.15  div=1.5e-04  nstep=1600  (169.6s)
+02:20:42  [m0] t=  118.8s  dt=0.066  Smax=38.87  div=1.3e-04  nstep=1800  (188.3s)
+02:21:02  [m0] t=  131.9s  dt=0.066  Smax=38.17  div=1.5e-04  nstep=2000  (208.7s)
+02:21:21  [m0] t=  145.1s  dt=0.066  Smax=37.54  div=1.2e-04  nstep=2200  (226.8s)
+02:21:41  [m0] t=  158.3s  dt=0.066  Smax=37.62  div=1.1e-04  nstep=2400  (246.9s)
+02:21:59  [m0] t=  171.5s  dt=0.066  Smax=37.87  div=1.2e-04  nstep=2600  (265.5s)
+02:22:20  [m0] t=  184.7s  dt=0.066  Smax=38.06  div=1.4e-04  nstep=2800  (286.2s)
+02:22:45  [m0] t=  197.9s  dt=0.066  Smax=38.07  div=1.3e-04  nstep=3000  (311.3s)
+02:23:05  [m0] t=  211.1s  dt=0.066  Smax=37.99  div=1.5e-04  nstep=3200  (330.9s)
+02:23:27  [m0] t=  224.3s  dt=0.066  Smax=38.16  div=1.4e-04  nstep=3400  (353.3s)
+02:23:48  [m0] t=  237.5s  dt=0.066  Smax=38.48  div=1.6e-04  nstep=3600  (373.8s)
+02:24:09  [m0] t=  250.7s  dt=0.066  Smax=38.74  div=2.1e-04  nstep=3800  (395.7s)
+02:24:32  [m0] t=  263.9s  dt=0.066  Smax=38.94  div=2.0e-04  nstep=4000  (418.5s)
+02:24:53  [m0] t=  277.1s  dt=0.066  Smax=39.32  div=2.0e-04  nstep=4200  (438.9s)
+02:25:12  [m0] t=  290.3s  dt=0.066  Smax=39.23  div=2.0e-04  nstep=4400  (458.0s)
+02:25:32  [m0] t=  303.5s  dt=0.066  Smax=39.04  div=2.0e-04  nstep=4600  (478.3s)
+02:25:50  [m0] t=  316.7s  dt=0.066  Smax=39.04  div=2.1e-04  nstep=4800  (496.5s)
+02:26:11  [m0] t=  329.9s  dt=0.066  Smax=39.10  div=2.2e-04  nstep=5000  (517.0s)
+02:26:29  [m0] t=  343.1s  dt=0.066  Smax=39.21  div=2.3e-04  nstep=5200  (534.8s)
+02:26:48  [m0] t=  356.3s  dt=0.066  Smax=39.06  div=2.4e-04  nstep=5400  (554.6s)
+02:27:09  [m0] t=  369.5s  dt=0.066  Smax=38.68  div=2.5e-04  nstep=5600  (574.8s)
+02:27:27  [m0] t=  382.6s  dt=0.066  Smax=38.54  div=2.8e-04  nstep=5800  (593.0s)
+02:27:49  [m0] t=  395.8s  dt=0.066  Smax=38.40  div=2.7e-04  nstep=6000  (614.9s)
+02:28:07  [m0] t=  409.0s  dt=0.066  Smax=38.24  div=2.7e-04  nstep=6200  (632.8s)
+02:28:26  [m0] t=  422.2s  dt=0.066  Smax=38.19  div=2.8e-04  nstep=6400  (652.7s)
+02:28:44  [m0] t=  435.4s  dt=0.066  Smax=38.46  div=3.0e-04  nstep=6600  (670.5s)
+02:29:05  [m0] t=  448.6s  dt=0.066  Smax=38.54  div=3.1e-04  nstep=6800  (690.7s)
+02:29:25  [m0] t=  461.8s  dt=0.066  Smax=38.44  div=3.2e-04  nstep=7000  (711.3s)
+02:29:43  [m0] t=  475.0s  dt=0.066  Smax=38.41  div=3.6e-04  nstep=7200  (729.4s)
+02:30:04  [m0] t=  488.2s  dt=0.066  Smax=38.47  div=3.7e-04  nstep=7400  (749.8s)
+02:30:22  [m0] t=  501.4s  dt=0.066  Smax=38.35  div=3.9e-04  nstep=7600  (767.7s)
+02:30:43  [m0] t=  514.6s  dt=0.066  Smax=38.53  div=4.1e-04  nstep=7800  (789.4s)
+02:31:03  [m0] t=  527.8s  dt=0.066  Smax=38.64  div=4.1e-04  nstep=8000  (808.8s)
+02:31:23  [m0] t=  541.0s  dt=0.066  Smax=38.50  div=4.1e-04  nstep=8200  (828.8s)
+02:31:43  [m0] t=  554.2s  dt=0.066  Smax=38.37  div=4.0e-04  nstep=8400  (848.8s)
+02:32:02  [m0] t=  567.4s  dt=0.066  Smax=38.34  div=4.0e-04  nstep=8600  (867.7s)
+02:32:22  [m0] t=  580.6s  dt=0.066  Smax=38.49  div=4.0e-04  nstep=8800  (888.5s)
+02:32:41  [m0] t=  593.8s  dt=0.066  Smax=38.80  div=3.7e-04  nstep=9000  (907.3s)
+02:32:52  [m0] done: 9095 steps, t=600.0s, wall=917.7s
+02:32:52  writing outputs ...
+02:32:52  Headline metrics: {
+  "S_max": 38.72995718021641,
+  "excess_max": 2.5124571802164084,
+  "dilution_min": 11.4559166327845,
+  "r_max_m": 109.09712743265045,
+  "z_deepest_m": 21.75,
+  "plume_top_m": 15.75,
+  "seabed_footprint_m2": 333.33333333333337,
+  "affected_volume_m3": 500.00000000000006,
+  "plume_rise_m": 0.8204256365401648,
+  "return_point_dist_m": 109.09712743265045,
+  "Fr_d": 38.81802502021225,
+  "n_ensemble": 1,
+  "max_exceedance_prob": 1.0,
+  "nf_rise_m": 17.655587504045446,
+  "nf_rise_ratio": 2.2000000000000006,
+  "nf_return_dist_m": 19.26064091350412,
+  "nf_return_dilution": 64.20213637834706,
+  "nf_merge_factor": 1.0,
+  "nf_n_ports": 1,
+  "near_field_coupling": true
+}
+02:32:54  ======================================================================
+02:32:54  PREDICTION SUMMARY:
+02:32:54    -- near field (validated correlations) --
+02:32:54    terminal rise height         : 17.7 m  (z_t/D·Fr=2.20)
+02:32:54    return-point distance        : 19.3 m
+02:32:54    near-field (return) dilution : 64 x
+02:32:54    -- far field (3-D PDE model) --
+02:32:54    peak salinity                : 38.73 g/kg
+02:32:54    max excess above ambient     : 2.51 g/kg
+02:32:54    horizontal reach r_max       : 109.1 m
+02:32:54    seabed footprint (>ΔS_crit)  : 333 m^2
+02:32:54    affected water volume        : 500 m^3
+02:32:54    discharge densimetric Froude : 38.82
+02:32:54  All outputs written to: /home/akosa/salinity_prediction/nereid_output
+02:32:54  ======================================================================
