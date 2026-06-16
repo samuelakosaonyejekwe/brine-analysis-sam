@@ -340,10 +340,13 @@ Rev 1.9 — closing the two remaining CODEABLE standing-gap items + GPU verifica
        stays ~1e-17). One-way --nest is unchanged.
   * GPU VERIFICATION (--gpu-verify): runs the SAME short sim on the CPU and CuPy backends and
        reports max|CPU-GPU| per field — the equivalence check the CuPy port needed once a CUDA
-       device exists (Colab/RunPod). Also hardened the port: PoissonSolver now host-ifies the
+       device exists (Colab/RunPod). Also hardened the port: (a) PoissonSolver now host-ifies the
        geometry arrays at construction, so a solver built AFTER fields moved to the GPU (CFL
-       sub-cycling / per-step non-Boussinesq refactor) still assembles the host sparse matrix
-       correctly. colab/nereid_gpu_verify.ipynb drives the check on Colab (numpy 1.26.4 pin!).
+       sub-cycling / per-step non-Boussinesq refactor) still assembles the host sparse matrix;
+       (b) scalar clamps in _cfl_substeps (and the device reductions in _dt) no longer go through
+       the array backend — CuPy's clip dispatches to ndarray.clip and a Python int has none, which
+       crashed the GPU path at step 1 (caught by --gpu-verify on a Colab T4, fixed with plain
+       min/max + float()). colab/nereid_gpu_verify.ipynb drives the check on Colab (numpy 1.26.4!).
 
 Author: NEREID-B reference implementation, Rev 1.9
 ================================================================================
@@ -2550,11 +2553,13 @@ class NereidSolver:
     def _dt(self):
         cfg, g = self.cfg, self.g
         dx, dy, dz = g.dx, g.dy, g.dz
-        uh = max(abs(self.u).max(), abs(self.v).max(), 1e-6)
-        umax = max(uh, abs(self.w).max(), g.U_d, 1e-6)
+        # float() the device reductions so this scalar dt arithmetic stays on the host
+        # (a CuPy 0-d scalar must not reach the module-level np.clip below).
+        uh = max(float(abs(self.u).max()), float(abs(self.v).max()), 1e-6)
+        umax = max(uh, float(abs(self.w).max()), g.U_d, 1e-6)
         dt_adv = cfg.cfl * min(dx, dy, dz) / umax
         # anisotropic diffusion limit using the actual max diagonal diffusivities
-        nut_m = self.nut.max()
+        nut_m = float(self.nut.max())
         wave = cfg.wave_disp_gain * math.pi * cfg.Hs ** 2 / max(cfg.Tw, 1e-3)
         _cal = max(cfg.farfield_disp_cal, 0.0)
         Dh = nut_m / cfg.Sc_t + _cal * cfg.disp_horiz + wave + _cal * cfg.shear_disp * uh * dx
@@ -2618,7 +2623,10 @@ class NereidSolver:
                    float(np.abs(self.w).max()), 1e-12)
         cfl_now = umax * dt / min(g.dx, g.dy, g.dz)
         n = int(math.ceil(cfl_now / max(self.cfg.cfl_target, 1e-6)))
-        return int(np.clip(n, 1, self.cfg.cfl_substep_max))
+        # pure-Python clamp: `n` is a scalar, so it must NOT go through the array backend
+        # (CuPy's clip dispatches to n.clip(...), which a Python int lacks -> AttributeError
+        # on the GPU path). min/max keep this backend-agnostic.
+        return int(min(max(n, 1), self.cfg.cfl_substep_max))
 
     def _poisson_for_dt(self, dt):
         """Return (PoissonSolver, alpha) for timestep dt, building+caching the LU

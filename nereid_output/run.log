@@ -1,16 +1,16 @@
-17:58:51  ======================================================================
-17:58:51  NEREID-B SELF-TEST
-17:59:16    [PASS] no NaN/Inf in fields  
-17:59:16    [PASS] salinity bounded [0, S0] (true bound)  min=36.011 max=36.74703 S0=65.0
-17:59:16    [PASS] divergence controlled  div=2.61e-17
-17:59:16    [PASS] projection divergence-free to machine precision (A4)  div=2.61e-17
-17:59:16    [PASS] global mass balance enforced (C2)  imbalance=1.37e-16
-17:59:16    [PASS] EOS density increases with salinity  1024.62 -> 1032.41
-17:59:16    [PASS] TVD advection non-amplifying  max=1.000000 (monotone)
-17:59:23    [PASS] checkpoint/restart reproduces exactly (free surface)  max|dS|=0.00e+00
-17:59:29    [PASS] checkpoint/restart reproduces exactly (rigid lid)  max|dS|=0.00e+00
-17:59:29    [PASS] dispersion tensor SPD (min eigenvalue >= 0)  min_eig=1.76e-03
-17:59:29    [PASS] Poisson matrix symmetric (partial cells)  max|A-A^T|=0.00e+00
-17:59:29    [PASS] implicit diffusion conserves scalar (closed box)  rel dmass=2.04e-16
-17:59:29    [PASS] conservative off-diagonal flux integrates to ~0 (closed box)  sum(div)=4.16e-17
-17:59:29  SELF-TEST: 13/13 checks passed.
+19:04:10  ======================================================================
+19:04:10  NEREID-B SELF-TEST
+19:04:46    [PASS] no NaN/Inf in fields  
+19:04:46    [PASS] salinity bounded [0, S0] (true bound)  min=36.011 max=36.74703 S0=65.0
+19:04:46    [PASS] divergence controlled  div=2.61e-17
+19:04:46    [PASS] projection divergence-free to machine precision (A4)  div=2.61e-17
+19:04:46    [PASS] global mass balance enforced (C2)  imbalance=1.37e-16
+19:04:46    [PASS] EOS density increases with salinity  1024.62 -> 1032.41
+19:04:46    [PASS] TVD advection non-amplifying  max=1.000000 (monotone)
+19:04:54    [PASS] checkpoint/restart reproduces exactly (free surface)  max|dS|=0.00e+00
+19:05:00    [PASS] checkpoint/restart reproduces exactly (rigid lid)  max|dS|=0.00e+00
+19:05:00    [PASS] dispersion tensor SPD (min eigenvalue >= 0)  min_eig=1.76e-03
+19:05:00    [PASS] Poisson matrix symmetric (partial cells)  max|A-A^T|=0.00e+00
+19:05:00    [PASS] implicit diffusion conserves scalar (closed box)  rel dmass=2.04e-16
+19:05:00    [PASS] conservative off-diagonal flux integrates to ~0 (closed box)  sum(div)=4.16e-17
+19:05:00  SELF-TEST: 13/13 checks passed.
