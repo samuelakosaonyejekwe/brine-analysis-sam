@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-build_model_docx.py  —  generate  5/model.docx
+build_model_docx.py  —  generate  model.docx  (salinity_prediction root)
 
 The COUPLED PDE SYSTEM that NEREID-B (solver.py) discretises and integrates.
 The equations below are transcribed DIRECTLY from the current solver source
-(Rev 1.5), so they reflect the corrected physics and the optional extensions:
+(Rev 2.0), so they reflect the corrected physics and the optional extensions:
   * corrected k-eps buoyancy-production SIGN (damping in stable stratification);
   * realizable k-eps time-scale limiter + Smagorinsky LES floor;
   * conservative, concentration-weighted Soret/Dufour cross-fluxes (G8);
@@ -15,6 +15,11 @@ The equations below are transcribed DIRECTLY from the current solver source
   * Craik-Leibovich Stokes-drift advection + radiation-stress forcing (H4);
   * variable-density (non-Boussinesq) projection option (H5);
   * Sommerfeld/Orlanski radiative outflow option (H6).
+Rev 1.6-2.0 added NUMERICAL/closure options only — WALE LES sub-grid viscosity,
+one-/two-way grid nesting, the auto fine-mesh resolved-near-field driver, the
+on-device (CuPy) pressure-Poisson solve, and the TEOS-10 GSW equation of state —
+none of which changes the CONTINUOUS coupled PDE system stated below; they are
+alternative closures / discretisations / hardware backends for the SAME equations.
 Run:  python3 build_model_docx.py
 """
 from docx import Document
@@ -104,7 +109,7 @@ para("Nonlinear Eulerian Reactive-osmotic Effluent Integro-Dispersion model for 
      "negatively-buoyant brine plume from an inclined submarine diffuser in a moving, "
      "stratified, wave-/tide-/wind-forced sea.", italic=True, color=ACCENT)
 para("This document states the coupled system of partial differential equations that the "
-     "reference solver (solver.py, Rev 1.5) discretises by a fractional-step finite-volume "
+     "reference solver (solver.py, Rev 2.0) discretises by a fractional-step finite-volume "
      "method. z is positive up with the still surface at z = 0; u = (u, v, w); bold symbols "
      "are vectors/tensors; repeated indices are summed.", size=10)
 
@@ -203,6 +208,11 @@ para("The eddy viscosity uses the realizable (Durbin) time-scale limiter plus a 
      "LES dissipation floor, so it cannot over-produce/rail on fine grids:")
 eq("ν_t = C_μ k 𝒯 ,   𝒯 = min( k/ε , C_r / ( √6 C_μ √(|S|²) ) ) ,   "
    "ν_t ← max( ν_t , (C_s Δ)² √(|S|²) )")
+para("Optional (les_mode=\"wale\"): a WALE sub-grid eddy viscosity may replace the Smagorinsky "
+     "floor on fine/jet grids — correct near-wall cubic scaling and zero ν_t in pure shear:")
+eq("ν_t^{WALE} = (C_w Δ)² ( S_{ij}^d S_{ij}^d )^{3/2} / "
+   "[ (S̄_{ij} S̄_{ij})^{5/2} + (S_{ij}^d S_{ij}^d)^{5/4} ] ,   "
+   "S_{ij}^d = ½(ḡ_{ij}² + ḡ_{ji}²) − ⅓ δ_{ij} ḡ_{kk}²")
 
 # ----------------------------------------------------------------------
 h("9.  Stochastic forcing (colored noise)", 1)
@@ -230,6 +240,11 @@ para("The unresolvable nozzle is represented by the validated empirical inclined
 eq("S_return = S_amb + (S₀ − S_amb) / (1.6 Fr) ,   x_return = 2.4 d Fr ,   z_rise = 2.2 d Fr")
 para("with reduced gravity g′₀ = g (ρ_amb − ρ_brine) / ρ_amb. This is the source term Q_S in "
      "eq. (4) and the corresponding momentum/temperature seeds.")
+para("Alternatives (same boundary role): a VISJET/JETLAG-class Lagrangian integral jet adds "
+     "ambient crossflow + stratification (nearfield_model=\"lagrangian\"); or the nozzle is left "
+     "RESOLVED (near_field_coupling=False) and the jet is computed directly on an auto-sized, "
+     "auto-refined two-way grid nest about the port (run_resolved_nearfield), so the resolved "
+     "near field feeds back onto the far field instead of being prescribed by Q_S.")
 
 # ----------------------------------------------------------------------
 h("12.  Surface-wave momentum coupling (optional, H4)", 1)
@@ -276,13 +291,14 @@ make_table(
 )
 
 para("")
-para("Reference implementation: solver.py (NEREID-B Rev 1.5). These equations are the "
+para("Reference implementation: solver.py (NEREID-B Rev 2.0). These equations are the "
      "continuous model; the solver is their numerical realisation (3-D structured "
      "finite-volume, partial-cell bathymetry, fractional-step Chorin projection, TVD-MUSCL "
-     "advection, implicit anisotropic dispersion, LU-factorised variable-coefficient "
-     "pressure-Poisson).", size=9, italic=True, color=ACCENT)
+     "advection, implicit anisotropic dispersion, variable-coefficient pressure-Poisson — "
+     "LU-factorised on the host, or solved on-device by CuPy PCG when run on a GPU).",
+     size=9, italic=True, color=ACCENT)
 
-out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "5", "model.docx")
+out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "6", "model.docx")
 os.makedirs(os.path.dirname(out), exist_ok=True)
 DOC.save(out)
 print("wrote", out, "with", _eqn[0], "numbered equations")
