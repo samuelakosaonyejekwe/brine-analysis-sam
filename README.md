@@ -15,6 +15,8 @@ dispersion tensor, buoyancy-modified realizable k–ε turbulence, partial-cell 
 optional osmotic/thermohaline cross-fluxes, an optional free surface, and a native
 Monte-Carlo stochastic ensemble for uncertainty.
 
+**Author: Akosa Samuel Onyejekwe.** Independent research work. Licensed under the MIT License (see `LICENSE`).
+
 ## Repository layout
 
 ```
