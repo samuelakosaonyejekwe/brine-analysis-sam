@@ -13,7 +13,7 @@ Everything is pulled dynamically from:
   validation/*.log, nereid_output/calibration.json
 
 Output: case_study/case_study.docx
-Colour rule: accents use project navy/teal; no pure black fills.
+Accent colours use the project navy/teal palette.
 """
 import csv
 import glob

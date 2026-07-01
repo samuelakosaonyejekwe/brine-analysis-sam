@@ -52,8 +52,3 @@ python3 solver.py --config case_study/sydney_sdp_case.json             # run the
 python3 case_study/postprocess.py                                      # full output suite
 python3 case_study/build_docx.py                                       # build case_study.docx
 ```
-
-## Colour policy
-
-All generated figures use vivid, non-black palettes (turbo / plasma / cividis / YlGnBu
-maps; teal/navy/orange line palette). No pure black is used for any fill, line or text.

@@ -10,8 +10,8 @@ COMPLETE holistic output suite required by the case study:
   * a full figure set of maps / filled contours / curves / quivers
   * a plot of EVERY CSV in the outputs folder (generic column plotter)
 
-STYLE RULE: no pure black anywhere. Text/axes use dark teal ink (#13343b);
-maps use vivid non-black colormaps (turbo / plasma / cividis / YlGnBu_r / etc.).
+Figure style: text/axes use a dark teal ink (#13343b);
+maps use vivid colormaps (turbo / plasma / cividis / YlGnBu_r / etc.).
 
 Usage:  python3 case_study/postprocess.py [outputs_dir]
 """
@@ -26,8 +26,8 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-# ---------------------------------------------------------------- style (no black)
-INK = "#13343b"       # dark teal ink for all text/axes (NEVER pure black)
+# ---------------------------------------------------------------- figure style
+INK = "#13343b"       # dark teal ink for all text/axes
 GRIDC = "#d3dade"
 plt.rcParams.update({
     "font.family": "DejaVu Sans", "font.size": 10,
@@ -36,9 +36,9 @@ plt.rcParams.update({
     "axes.linewidth": 1.0, "grid.color": GRIDC, "figure.facecolor": "white",
     "savefig.facecolor": "white",
 })
-# line/marker palette (vivid, no black)
+# line/marker palette
 PAL = ["#1f6f8b", "#e76f51", "#2a9d8f", "#6a4c93", "#e9c46a", "#b5179e", "#4c956c"]
-SEA = "#5a3e2b"       # seabed fill (dark brown, not black)
+SEA = "#5a3e2b"       # seabed fill (dark brown)
 STAR = "#e63946"      # outfall marker
 NAVY = "#0B3D5C"
 

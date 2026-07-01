@@ -12,7 +12,7 @@ Two families:
   (case_study/outputs/_animrun/snapshots/snap_*.npz):
     anim_time_plume.gif            depth-max ΔS plan view vs simulated time
 
-No pure black (dark-teal ink; turbo/plasma/YlOrRd maps). Frames are written with
+Dark-teal ink; turbo/plasma/YlOrRd maps. Frames are written with
 Pillow (no ffmpeg needed). Output: case_study/outputs/animations/.
 """
 import glob
