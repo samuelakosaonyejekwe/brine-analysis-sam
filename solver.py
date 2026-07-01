@@ -3272,7 +3272,7 @@ def _make_figures(cfg, grid, S, excess, dil, exceed, cl, outdir, st):
         plt.close(fig)
 
     def _star(ax):
-        ax.scatter([xs], [ys], c="red", marker="*", s=160, edgecolors="k",
+        ax.scatter([xs], [ys], c="red", marker="*", s=160, edgecolors="#0B3D5C",
                    zorder=5, label="outfall")
 
     bottom = _seabed(excess)
@@ -3368,10 +3368,10 @@ def _make_figures(cfg, grid, S, excess, dil, exceed, cl, outdir, st):
         tr = np.array(nf["trajectory"])
         fig, ax = plt.subplots(figsize=(7.5, 4.2))
         ax.plot(tr[:, 0], tr[:, 1], "b-", lw=2.5)
-        ax.scatter([0], [0], c="red", marker="*", s=160, edgecolors="k", zorder=5,
+        ax.scatter([0], [0], c="red", marker="*", s=160, edgecolors="#0B3D5C", zorder=5,
                    label="nozzle")
         ax.scatter([nf["x_return"]], [0], c="darkorange", marker="o", s=80,
-                   edgecolors="k", zorder=5, label="seabed return")
+                   edgecolors="#0B3D5C", zorder=5, label="seabed return")
         ax.axhline(nf["z_rise"], color="gray", ls=":", lw=1)
         ax.annotate(f"terminal rise z_t = {nf['z_rise']:.1f} m\n"
                     f"z_t/(D·Fr) = {nf['rise_ratio']:.2f}  (lab 2.1–2.8)\n"

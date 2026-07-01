@@ -1,0 +1,7 @@
+14:51:21  NEREID-B PDE BENCHMARK
+14:51:21  PDE BENCHMARK: dense lock-exchange gravity-current front Froude number
+14:59:33    reduced gravity g' = 0.2140 m/s^2 ; sqrt(g'H) = 2.069 m/s
+14:59:33    measured front speed U_f = 0.979 m/s over 1585 samples
+14:59:33    -> front Froude number Fr_f = U_f/sqrt(g'H) = 0.47  (inviscid Benjamin ~0.5; turbulent damping lowers it; band 0.1-0.7)
+14:59:33    -> PDE far-field core PASS (sustained sub-critical gravity current)
+14:59:33    NOTE: this validates the SOLVED far-field gravity-current dynamics (buoyancy->momentum->transport) independently of the near-field jet correlations.

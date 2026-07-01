@@ -1,0 +1,128 @@
+16:57:08  ======================================================================
+16:57:08  NEREID-B solver starting
+16:57:08  grid 44x26x20  domain 300.0x120.0x25.0 m  t_end=200.0s  ensemble=1
+16:57:08  fluid cells: 22646/22880  nozzle U_d=4.01 m/s
+16:57:08  NOTE (resolution): dz=1.25 m — the ~1-2 m near-bed gravity current is UNDER-RESOLVED. Default outputs are qualitative; use --hires (64x40x28) or finer for quantitative far-field numbers.
+16:57:08  NOTE (validation): near-field = lab-validated correlations. Turbulence now physical (k-eps buoyancy SIGN BUG fixed + REALIZABLE k-eps -> no nut railing on any grid). FAR-FIELD is CONSERVATIVE and validated to be so across the published Perth multi-point transect (--validate-farfield): Perth ~35:1 vs documented 45:1 (under-dilutes ~22% = over-predicts impact = safe). Gacia reach ~2x (structural). Absolute far-field numbers are indicative; a CTD/ADCP survey at the modelled outfall would tighten them.
+16:57:08  near-field (validated correlations): Fr=24.3  rise=6.4m (z_t/D·Fr=2.20)  return=7.0m  dilution=38x
+16:57:08    -> 3-D far field seeded with diluted plume S=36.43 g/kg
+16:57:08  assembling & factorising pressure-Poisson operator ...
+16:57:52  factorisation complete.
+16:57:52  --- ensemble member 1/1 (in-process, full diagnostics) ---
+16:59:57  [m0] t=   21.8s  dt=0.109  Smax=36.43  div=6.5e-17  massimb=3.6e-16  nut@cap=0.0%  k@cap=0.0%  nstep=200  (124.5s)
+17:02:00  [m0] t=   43.7s  dt=0.109  Smax=36.43  div=1.4e-16  massimb=1.2e-16  nut@cap=0.0%  k@cap=0.0%  nstep=400  (247.6s)
+17:04:22  [m0] t=   65.5s  dt=0.109  Smax=36.43  div=1.6e-16  massimb=0.0e+00  nut@cap=0.0%  k@cap=0.0%  nstep=600  (389.9s)
+17:06:54  [m0] t=   87.4s  dt=0.109  Smax=36.43  div=1.2e-16  massimb=3.6e-16  nut@cap=0.0%  k@cap=0.0%  nstep=800  (541.1s)
+17:21:18  [m0] t=  109.2s  dt=0.109  Smax=36.43  div=1.2e-16  massimb=1.2e-16  nut@cap=0.0%  k@cap=0.0%  nstep=1000  (1405.5s)
+17:23:10  [m0] t=  131.1s  dt=0.109  Smax=36.43  div=1.2e-16  massimb=0.0e+00  nut@cap=0.0%  k@cap=0.0%  nstep=1200  (1517.3s)
+17:25:10  [m0] t=  152.9s  dt=0.109  Smax=36.43  div=1.5e-16  massimb=3.6e-16  nut@cap=0.0%  k@cap=0.0%  nstep=1400  (1637.9s)
+17:27:14  [m0] t=  174.8s  dt=0.109  Smax=36.43  div=1.7e-16  massimb=1.2e-16  nut@cap=0.0%  k@cap=0.0%  nstep=1600  (1761.6s)
+17:29:08  [m0] t=  196.6s  dt=0.109  Smax=36.43  div=2.2e-16  massimb=2.4e-16  nut@cap=0.0%  k@cap=0.0%  nstep=1800  (1875.2s)
+17:29:28  [m0] done: 1832 steps, t=200.1s, wall=1895.4s
+17:29:28  writing outputs ...
+17:29:29  NOTE: ensemble=1 -> 'exceedance' map is a single-realisation INDICATOR (0/1), not a probability. Use --ensemble N (N>=30) for a genuine probabilistic compliance field.
+17:29:29  Headline metrics: {
+  "S_max": 36.42895999542326,
+  "excess_max": 1.0222840539712266,
+  "dilution_min": 30.906282727647124,
+  "footprint_resolution_m2": 31.468531468531467,
+  "reach_resolution_m": 6.818181818181818,
+  "depth_resolution_m": 1.25,
+  "r_max_m": 55.1974879090888,
+  "z_deepest_m": 24.375,
+  "plume_top_m": 0.625,
+  "seabed_footprint_m2": 4761.165379894475,
+  "affected_volume_m3": 90511.36363636362,
+  "plume_rise_m": 22.68700360454343,
+  "return_point_dist_m": 54.59200471718597,
+  "seabed_footprint_m2_cellcount": 4688.811188811188,
+  "r_max_m_cellcount": 69.70223928114525,
+  "footprint_vs_threshold_m2": {
+    "0.1": 11282.276499667802,
+    "0.25": 7620.844410142067,
+    "0.5": 4761.165379894475,
+    "0.75": 2936.9676526867156,
+    "1": 0.0
+  },
+  "Fr_d": 24.30764151819003,
+  "n_ensemble": 1,
+  "max_exceedance_prob": 1.0,
+  "nf_rise_m": 6.4172173608021685,
+  "nf_rise_ratio": 2.2,
+  "nf_return_dist_m": 7.000600757238729,
+  "nf_return_dilution": 37.87878787878788,
+  "nf_merge_factor": 0.9739423878917409,
+  "nf_n_ports": 72,
+  "near_field_coupling": true,
+  "nf_dilution_band": [
+    36.69507575757576,
+    41.42992424242424
+  ],
+  "steady_state": {
+    "window_s": [
+      140.02973082772687,
+      200.10488835912471
+    ],
+    "n_samples": 4,
+    "converged": {
+      "S_max": true,
+      "excess_max": true,
+      "r_max_m": true,
+      "z_deepest_m": true,
+      "seabed_footprint_m2": true,
+      "dilution_min": true
+    },
+    "S_max_mean": 36.42895999499002,
+    "S_max_std": 3.6752180836134413e-10,
+    "excess_max_mean": 1.0224082251641846,
+    "excess_max_std": 0.00034488637278440564,
+    "r_max_m_mean": 65.51502317015971,
+    "r_max_m_std": 3.776815991203338,
+    "z_deepest_m_mean": 24.375,
+    "z_deepest_m_std": 0.0,
+    "seabed_footprint_m2_mean": 4586.538461538462,
+    "seabed_footprint_m2_std": 78.27698368845749,
+    "dilution_min_mean": 30.90253268342415,
+    "dilution_min_std": 0.01042064347434717,
+    "steady_state_reached": true
+  },
+  "divergence_final": 2.3514718817954293e-16,
+  "divergence_max_over_run": 1.6199760835485828e-15,
+  "divergence_drift_ratio": 0.14515472825033895,
+  "nut_cap_fraction": 0.0,
+  "k_cap_fraction": 0.0,
+  "mass_imbalance_final": 1.1874981209163014e-16,
+  "eta_min_m": 0.0,
+  "eta_max_m": 0.0,
+  "eta_absmax_m": 0.0,
+  "exceedance_is_probability": false,
+  "active_physics": {
+    "osmotic_flux": false,
+    "osmotic_body_force": false,
+    "soret_cross_diffusion": false,
+    "full_tensor_dispersion": true,
+    "stochastic_forcing": true,
+    "free_surface": false,
+    "near_field_coupling": true
+  },
+  "vprofile_x_m": 51.13636363636364,
+  "vprofile_y_m": 62.3076923076923
+}
+17:29:29  ======================================================================
+17:29:29  PREDICTION SUMMARY:
+17:29:29    -- near field (validated correlations) --
+17:29:29    terminal rise height         : 6.4 m  (z_t/D·Fr=2.20)
+17:29:29    return-point distance        : 7.0 m
+17:29:29    near-field (return) dilution : 38 x
+17:29:29    -- far field (3-D PDE model) --
+17:29:29    peak salinity                : 36.43 g/kg
+17:29:29    max excess above ambient     : 1.02 g/kg
+17:29:29    horizontal reach r_max       : 55.2 m
+17:29:29    seabed footprint (>ΔS_crit)  : 4761 m^2  (resolution 31 m^2)
+17:29:29    affected water volume        : 90511 m^3
+17:29:29    discharge densimetric Froude : 24.31
+17:29:29    steady-state (140-200s): STEADY; excess=1.02±0.00, reach=66±4 m
+17:29:29    divergence: final=2.4e-16, max=1.6e-15, drift x0.1
+17:29:29    exceedance map               : single-realisation INDICATOR (use --ensemble N>=30 for probability)
+17:29:29  All outputs written to: /home/akosa/brine_analysis/case_study/outputs/_animrun
+17:29:29  ======================================================================

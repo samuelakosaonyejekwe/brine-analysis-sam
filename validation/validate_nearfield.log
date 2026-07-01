@@ -1,0 +1,13 @@
+15:14:35  ======================================================================
+15:14:35  NEREID-B VALIDATION
+15:14:35  VALIDATION: near-field inclined dense-jet model vs lab correlations
+15:14:35    case                     Fr   z_t/(D*Fr)   rise(m)  dilution   verdict
+15:14:35    desal 60deg, Fr~38      38.3     2.20      16.8       61x   PASS
+15:14:35    desal 60deg, Fr~20      20.2     2.20       8.9       32x   PASS
+15:14:35    small 60deg, Fr~29      28.6     2.20       6.3       46x   PASS
+15:14:35    inclined 45deg          23.3     1.80       6.3       37x   PASS
+15:14:35    published 60-degree band: z_t/(D*Fr) = 2.1 - 2.8 ;  return dilution S_r = 1.6 Fr
+15:14:35    -> near-field REPRODUCES validated lab scaling
+15:14:35    NOTE: near-field uses validated empirical correlations (the lab data);
+15:14:35          the 3-D model provides the far-field from this diluted seed, so the
+15:14:35          earlier ~4x near-field over-prediction of the raw 3-D jet is removed.

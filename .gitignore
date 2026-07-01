@@ -9,3 +9,9 @@ nereid_anim/
 
 # Keep nereid_output text artifacts (calibration.json, perth_validation.md,
 # csv, json, run.log) but not the heavy binary field dumps (*.npz above).
+
+# Solver working dir (calibration.json is mirrored into validation/)
+nereid_output/
+
+# User's separate dissertation project — scratch, never tracked
+ignore/

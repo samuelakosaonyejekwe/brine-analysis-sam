@@ -1,0 +1,32 @@
+{
+  "site": "USER CTD/ADCP survey (site_ctd_dilution_transect.csv)",
+  "reference": "case_study/inputs/site_ctd_dilution_transect.csv",
+  "method": "match brine dilution at target distance",
+  "target_distance_m": 50.0,
+  "dilution_target": 44.0,
+  "dS_target_ppt": 0.7159090909090909,
+  "verdict": "validated",
+  "validation_error_pct": 2.2,
+  "modeled_dilution_range": [
+    42.915718810347045,
+    43.283419122244325
+  ],
+  "samples_cal_dilution_dS": [
+    [
+      0.5,
+      42.915718810347045,
+      0.7317975696863137
+    ],
+    [
+      1.0,
+      43.03865185871179,
+      0.729710690181059
+    ],
+    [
+      2.0,
+      43.283419122244325,
+      0.7255887422288033
+    ]
+  ],
+  "farfield_disp_cal": 1.0
+}

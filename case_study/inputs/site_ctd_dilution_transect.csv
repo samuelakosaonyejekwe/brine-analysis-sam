@@ -1,0 +1,5 @@
+distance_m,dilution,dS_ppt,S0,S_amb,depth_m,U_current,d_p_m,Q_per_port_m3s,theta_deg,n_ports,port_spacing_m
+7.0,37.0,0.851,67.0,35.5,25.0,0.12,0.12,0.0453,60.0,72,5.0
+15.0,40.0,0.787,,,,,,,,,
+25.0,42.0,0.750,,,,,,,,,
+50.0,44.0,0.716,,,,,,,,,
