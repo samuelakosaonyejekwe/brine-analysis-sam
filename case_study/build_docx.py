@@ -39,6 +39,7 @@ with open(os.path.join(OUT, "metrics_summary.json")) as f:
     MS = json.load(f)
 C = MS["config"]
 M = MS["metrics"]
+ss = M.get("steady_state", {})
 
 
 def cal_value():
@@ -139,8 +140,12 @@ P("Modelling tool: NEREID-B (solver.py) — a universal 3-D finite-volume couple
   "brine-dispersion solver with near-field inclined-dense-jet correlation coupling, "
   "buoyancy-modified realizable k–ε turbulence, a full anisotropic dispersion tensor, "
   "partial-cell bathymetry and a Monte-Carlo stochastic ensemble. "
-  "Status: CALIBRATED against site CTD/ADCP survey data and VALIDATED against "
-  "laboratory, field and analytical benchmarks.", italic=True, size=10, color=TEAL)
+  "Status: VALIDATED against laboratory, field and analytical benchmarks. The far field "
+  "is UNCALIBRATED — the dispersivity multiplier returned 1.00 against a representative "
+  "(constructed, not measured) site transect, so no fitting was performed. Read §1.1 "
+  "before quoting any number.", italic=True, size=10, color=TEAL)
+P("Author: Akosa Samuel Onyejekwe — independent research work.",
+  bold=True, size=11, color=NAVY)
 
 # ============================================================ 1 EXEC SUMMARY
 H("1.  Executive summary")
@@ -150,10 +155,11 @@ P(f"NEREID-B was applied to predict the fate of the hypersaline reject (brine) "
   f"The model resolves the near-field inclined-dense-jet behaviour via validated "
   f"correlations and the 3-D far-field gravity-current spreading and dilution of the "
   f"negatively-buoyant plume over the shelf seabed, under the site's ambient current, "
-  f"stratification and energetic open-ocean wave climate. The far field was CALIBRATED "
-  f"against a site CTD/ADCP dilution transect and the whole model chain was VALIDATED "
-  f"against the Roberts (1997) dense-jet laboratory scaling, the published Perth "
-  f"multi-point field transect and a lock-exchange PDE benchmark.")
+  f"stratification and energetic open-ocean wave climate. The far field was compared "
+  f"against a representative site dilution transect (no fitting was required, and none "
+  f"was performed) and the whole model chain was VALIDATED against the Roberts (1997) "
+  f"dense-jet laboratory scaling, the published Perth multi-point field transect and a "
+  f"lock-exchange PDE benchmark.")
 P("Headline predictions (steady, quasi-equilibrium plume):", bold=True)
 bullet(f"Source: discharge salinity {C['S0']:.1f} g/kg into {C['S_amb_surf']:.1f} g/kg "
        f"ambient (excess at source {excess_src:.1f} g/kg, "
@@ -161,22 +167,64 @@ bullet(f"Source: discharge salinity {C['S0']:.1f} g/kg into {C['S_amb_surf']:.1f
 bullet(f"Near field (validated correlations): densimetric Froude number "
        f"Fr = {g('Fr_d', 0):.1f}; terminal rise {g('nf_rise_m', 0):.1f} m; seabed return "
        f"at {g('nf_return_dist_m', 0):.1f} m; return dilution {g('nf_return_dilution', 0):.0f}:1.")
-bullet(f"Far field: peak salinity {g('S_max', 0):.2f} g/kg; max excess "
-       f"{g('excess_max', 0):.2f} g/kg; minimum dilution {g('dilution_min', 0):.0f}:1; "
-       f"seabed footprint above ΔS={C['dS_crit']} g/kg ≈ {g('seabed_footprint_m2', 0):.0f} m²; "
-       f"affected water volume ≈ {g('affected_volume_m3', 0):.0f} m³; horizontal reach "
-       f"r_max ≈ {g('r_max_m', 0):.0f} m.")
+bullet(f"Far field: seabed footprint above ΔS={C['dS_crit']} g/kg "
+       f"≈ {g('seabed_footprint_m2', 0):.0f} m²; maximum excess {g('excess_max', 0):.2f} g/kg; "
+       f"horizontal reach r_max ≈ {g('r_max_m', 0):.0f} m in the final ensemble-mean field "
+       f"(but {ss.get('r_max_m_mean', 0):.0f} ± {ss.get('r_max_m_std', 0):.0f} m over the "
+       f"steady window, and still growing at t_end — see §1.1).")
+bullet(f"Reported peak salinity {g('S_max', 0):.2f} g/kg and minimum dilution "
+       f"{g('dilution_min', 0):.0f}:1 are NOT emergent predictions: {g('S_max', 0):.4f} g/kg is "
+       f"exactly the prescribed source value handed over by the near-field model, and the "
+       f"apparent {g('dilution_min', 0):.0f}:1 arises from measuring that value against the "
+       f"fresher shallow ambient (§12.4).")
 if CAL:
-    bullet(f"Calibration: far-field dispersivity multiplier farfield_disp_cal = "
-           f"{CAL.get('farfield_disp_cal', C.get('farfield_disp_cal', 1.0)):.2f}, fitted so the "
-           f"model reproduces the site survey dilution at the mixing-zone boundary.")
+    bullet(f"Calibration: the far-field dispersivity multiplier farfield_disp_cal returned "
+           f"{CAL.get('farfield_disp_cal', C.get('farfield_disp_cal', 1.0)):.2f} — i.e. unity, no "
+           f"adjustment. The target transect is representative, not measured, so this is a "
+           f"consistency check rather than a calibration (§10).")
 P(f"Mixing-zone assessment: against a conservative sub-lethal assessment contour of "
   f"ΔS = {C['dS_crit']} g/kg (more protective than the ~1 ppt typical of NSW mixing-zone "
-  f"practice), the calibrated model predicts a seabed excess-salinity footprint of "
-  f"≈ {g('seabed_footprint_m2', 0):.0f} m² confined to within ≈ {g('r_max_m', 0):.0f} m of "
-  f"the diffuser. Run health is exact (divergence {g('divergence_final', 0):.1e}, mass "
-  f"imbalance {g('mass_imbalance_final', 0):.1e}, eddy-viscosity cap engaged in "
+  f"practice), the model predicts a seabed excess-salinity footprint of "
+  f"≈ {g('seabed_footprint_m2', 0):.0f} m² within roughly {g('r_max_m', 0):.0f}–"
+  f"{ss.get('r_max_m_mean', 0):.0f} m of the diffuser. The maximum excess anywhere in the "
+  f"domain is {g('excess_max', 0):.2f} g/kg, comfortably inside every applicable limit "
+  f"(NSW ~1 ppt; Perth 1.2 ppt at 50 m; California 2.0 ppt at 100 m), so the compliance "
+  f"conclusion is robust even where the footprint precision is not. Run health is exact "
+  f"(divergence {g('divergence_final', 0):.1e}, mass imbalance "
+  f"{g('mass_imbalance_final', 0):.1e}, eddy-viscosity cap engaged in "
   f"{100*g('nut_cap_fraction', 0):.0f}% of cells — physical, no railing).")
+
+# ------------------------------------------------------------ 1.1 CAVEATS
+H("1.1  Interpretation caveats (read before quoting any number)", 2)
+P("The numbers above are reported exactly as the run produced them. Four of them mean "
+  "less than they appear to, and this section states why. None of these caveats overturn "
+  "the compliance conclusion; all of them bear on its precision.", italic=True)
+for b in [
+    f"Source blob, not a resolved plume. The 3-D far field is seeded by relaxing S toward "
+    f"S_source inside a Gaussian whose width is max(physical return width, 1.5·max(dx,dz)). "
+    f"With dx = 5.77 m the grid floor (8.65 m) overrides the physical width (2.50 m) by "
+    f"3.5×, so brine is injected over roughly a third of the water column. Consequently "
+    f"S_max is exactly S_source, and ΔS > {C['dS_crit']} g/kg extends to within 0.48 m of "
+    f"the sea surface at the source column.",
+    "The plume is NOT bottom-trapped near the source. In the source column the salinity is "
+    "vertically uniform at S_source from bed to surface. Bed-intensification — the genuine "
+    "gravity-current signature — only emerges beyond roughly 30 m downstream, where the bed "
+    "excess exceeds the surface excess by a factor of about 3.7 at 55 m. Claims that the "
+    "upper water column is unaffected are not supported by this run.",
+    f"Steady state was not reached for the reach. r_max grows monotonically through the run "
+    f"(26 → 96 m) and is still increasing at t_end = {C['t_end']:.0f} s. It passes the "
+    f"steady-state test only because that test bounds the relative scatter (tol = 0.20) "
+    f"rather than the trend. The domain flush time is ≈ 2,500 s, so the run covers ≈ 8% of it.",
+    f"The {C['ensemble']}-member ensemble cannot support the statistics derived from it. With "
+    f"two members the exceedance field takes only the values 0, 0.5 and 1, and a "
+    f"95th percentile is simply the larger of two samples. The ensemble spread is reported "
+    f"in §12.3 for completeness and should not be used as an uncertainty bound.",
+    "Physics claimed in §2 that was INACTIVE in this run: osmotic salt flux, osmotic body "
+    "force, Soret/Dufour cross-diffusion, the higher-order (TEOS-10-style) equation-of-state "
+    "terms, the free surface, bottom drag and the wall function. The run used near-field "
+    "coupling, full-tensor dispersion, realizable k–ε and stochastic forcing only.",
+]:
+    bullet(b)
 
 # ============================================================ 2 NOVELTY / UNIVERSALITY
 H("2.  Novelty, universality and scope of the NEREID-B solver")
@@ -229,7 +277,7 @@ for o in ["the near-field rise height, seabed return distance and return dilutio
           "the steady 3-D distribution of excess salinity and brine dilution over the seabed;",
           "the centreline dilution and excess-salinity decay with distance;",
           "the seabed footprint area exceeding the assessment threshold and the affected volume;",
-          "the vertical structure of the bottom-trapped dense layer;",
+          "the vertical structure of the near-bed dense layer;",
           "mixing-zone compliance with a stochastic uncertainty band."]:
     bullet(o)
 
@@ -392,26 +440,46 @@ table(["Run-health metric", "Value"],
        ["Eddy-viscosity cap fraction", f"{100*g('nut_cap_fraction', 0):.1f} %"],
        ["Steady-state window", f"{ss.get('window_s', ['–','–'])[0]:.0f}–{ss.get('window_s',[0,0])[1]:.0f} s"
         if ss.get('window_s') else "–"],
-       ["Steady state reached", f"{ss.get('steady_state_reached', '–')}"]],
+       ["Steady state reached", f"{ss.get('steady_state_reached', '–')} (scatter test only — see below)"]],
       caption="Table 9.1 — Solver health and convergence diagnostics.")
+P(f"Qualification of the steady-state flag. The flag is set when the relative standard "
+  f"deviation of each tracked metric over the last 34% of the run falls below steady_tol = "
+  f"0.20. It bounds scatter, not trend. Over the {ss.get('window_s', [140, 200])[0]:.0f}–"
+  f"{ss.get('window_s', [140, 200])[1]:.0f} s window the reach r_max has mean "
+  f"{ss.get('r_max_m_mean', 0):.1f} m and standard deviation {ss.get('r_max_m_std', 0):.1f} m, "
+  f"a ratio of 0.11 — so it passes — yet its four samples are 70, 79, 88 and 96 m: a "
+  f"monotonic 37% increase. The reach had not converged. S_max is genuinely stationary only "
+  f"because it is pinned to the prescribed source value (§12.4). The divergence and "
+  f"mass-balance figures are sound and unaffected.", italic=True, color=TEAL)
 
 # ============================================================ 10 CALIBRATION
-H("10.  Calibration against the site CTD/ADCP survey")
+H("10.  Comparison against the representative site transect")
 tr_hdr, tr_rows = read_csv(os.path.join(INP, "site_ctd_dilution_transect.csv"))
-P("The far-field spreading rate — the single knob farfield_disp_cal that scales the "
-  "tunable horizontal dispersivity — was calibrated so the model reproduces the site "
-  "CTD/ADCP dilution transect at the mixing-zone boundary (50 m). The near-field "
-  "correlations and molecular/turbulent diffusivities are left physical (unfitted).")
-table(["Distance (m)", "Measured dilution", "Measured ΔS (g/kg)"],
+P("The far-field spreading rate is governed by a single knob, farfield_disp_cal, which "
+  "scales the tunable horizontal dispersivity. It was exercised against a centreline "
+  "dilution transect at the mixing-zone boundary (50 m). The near-field correlations and "
+  "the molecular and turbulent diffusivities are left physical (unfitted).")
+table(["Distance (m)", "Target dilution (representative)", "Target ΔS (g/kg)"],
       [[r[0], r[1], r[2]] for r in tr_rows],
-      caption="Table 10.1 — Site CTD/ADCP dilution transect used as the calibration target "
-              "(inputs/site_ctd_dilution_transect.csv).")
+      caption="Table 10.1 — Representative centreline dilution transect "
+              "(inputs/site_ctd_dilution_transect.csv). These values are constructed, "
+              "not measured — see the provenance note below.")
 if CAL:
-    P(f"Calibration result: farfield_disp_cal = "
-      f"{CAL.get('farfield_disp_cal', 1.0):.2f} "
-      f"(modelled dilution reproduces the {tr_rows[-1][1]}:1 target at "
-      f"{tr_rows[-1][0]} m). Full log: validation/ctd_calibration.log; "
-      f"machine-readable result: nereid_output/calibration.json.", color=TEAL)
+    P(f"Result: farfield_disp_cal = {CAL.get('farfield_disp_cal', 1.0):.2f}. The multiplier "
+      f"returned unity, i.e. no adjustment was made and the model reproduced the "
+      f"{tr_rows[-1][1]}:1 target at {tr_rows[-1][0]} m without tuning. Full log: "
+      f"validation/ctd_calibration.log; machine-readable result: "
+      f"nereid_output/calibration.json.", color=TEAL)
+P("Provenance — this is a consistency check, not a calibration. The transect is generated "
+  "by case_study/make_site_data.py, whose source comment records that the stations were "
+  "chosen to be “reproducible by the model at no tuning”. A procedure that recovers "
+  "unity against a target constructed to be recoverable has demonstrated consistency, not "
+  "predictive skill. The model has NOT been calibrated to measured data, and the word "
+  "“calibrated” is therefore avoided throughout this report. The independent far-field "
+  "evidence is the Perth transect in §11, against which the model was not fitted and is "
+  "shown conservative. To convert this into a genuine calibration, either commission a "
+  "site CTD/ADCP survey or adopt the measured Gold Coast Tugun transect (Baum et al. 2019) "
+  "as the target.", italic=True, color=TEAL)
 
 # ============================================================ 11 VALIDATION
 H("11.  Validation and data sources")
@@ -433,11 +501,17 @@ table(["Level", "Benchmark / data (source)", "Accepted value", "NEREID-B result"
         "exact / bounded", "13/13 self-tests PASS"]],
       caption="Table 11.1 — Validation summary (verified sources; see §17 and validation/sources.md). "
               "Logs in validation/.")
-P("The near-field uses the validated laboratory scaling directly; the far field is "
-  "calibrated to the site survey (§10) and shown conservative against the in-class field "
-  "data. Independently, the actual SDP Kurnell outfall study (Clark et al. 2018) found "
-  "detectable ecological effects to ~100 m, consistent with the predicted footprint scale. "
-  "Full citations and honest data-provenance caveats are in validation/sources.md.")
+P("The near-field uses the validated laboratory scaling directly — note that recovering "
+  "z_t/(D·Fr) = 2.20 from a hard-coded 2.2 coefficient verifies the coupling arithmetic "
+  "rather than independently predicting the physics. The far field is compared with the "
+  "representative site transect (§10, no fitting) and shown conservative against the in-class "
+  "Perth field data, which the model was never fitted to. The two genuinely independent "
+  "gates are therefore the Perth comparison and the lock-exchange PDE benchmark. "
+  "Independently, the actual SDP Kurnell outfall study (Clark et al. 2018) found detectable "
+  "ecological effects to ~100 m; this is an ecological effect distance driven partly by "
+  "diffuser-induced near-bed flow, not a salinity isopleth, so it is an order-of-magnitude "
+  "consistency check rather than a validation. Full citations and honest data-provenance "
+  "caveats are in validation/sources.md.")
 
 # ============================================================ 12 RESULTS
 H("12.  Predicted results")
@@ -453,7 +527,9 @@ table(["Quantity", "Predicted value", "Unit"],
        ["Horizontal reach r_max", f"{g('r_max_m', 0):.0f}", "m"],
        [f"Seabed footprint (ΔS > {C['dS_crit']})", f"{g('seabed_footprint_m2', 0):.0f}", "m²"],
        ["Affected water volume", f"{g('affected_volume_m3', 0):.0f}", "m³"]],
-      caption="Table 12.1 — Headline predicted metrics (calibrated run).")
+      caption="Table 12.1 — Headline predicted metrics. Peak salinity and minimum dilution "
+              "are diagnostics of the prescribed source value, not emergent predictions (§12.4); "
+              "r_max is the final ensemble-mean value and has not converged (§1.1).")
 
 H("12.2  Seabed footprint sensitivity to the threshold", 2)
 iso_p = os.path.join(OUT, "isopleth_area_vs_threshold.csv")
@@ -464,10 +540,56 @@ if os.path.exists(iso_p):
           caption="Table 12.2 — Seabed footprint area vs excess-salinity threshold "
                   "(isopleth_area_vs_threshold.csv).")
 
-H("12.3  Stochastic uncertainty (ensemble)", 2)
+H("12.3  Stochastic uncertainty (ensemble) — reported, but not usable as an uncertainty bound", 2)
 P(f"Across the {C['ensemble']}-member ensemble the peak-excess standard deviation is "
-  f"{g('S_std_max', 0):.3f} g/kg and the 95th-percentile excess reaches "
-  f"{g('excess_p95_max', 0):.2f} g/kg, giving the exceedance-probability field in §13.")
+  f"{g('S_std_max', 0):.3f} g/kg and the nominal 95th-percentile excess reaches "
+  f"{g('excess_p95_max', 0):.2f} g/kg, giving the exceedance field plotted in §13.")
+P(f"These figures are reported for completeness and must not be used as an uncertainty "
+  f"bound. With {C['ensemble']} members a sample standard deviation carries ~100% relative "
+  f"uncertainty, and a 95th percentile is not estimable at all — it is simply the larger of "
+  f"two samples. The 'exceedance probability' field can take only the values 0, 0.5 and 1, so "
+  f"it is a three-level indicator, not a probability. Compounding this, the "
+  f"Ornstein–Uhlenbeck correlation time is τ = {C.get('stoch_tau', 600):.0f} s against a run "
+  f"length of {C['t_end']:.0f} s, so the forcing never decorrelates within a member and each "
+  f"realisation samples essentially one frozen draw of the random field. A defensible "
+  f"exceedance map needs O(100) members run over several correlation times.",
+  italic=True, color=TEAL)
+
+H("12.4  Vertical structure and what the source blob does to it", 2)
+P("The 3-D far field is seeded by relaxing salinity toward S_source inside a Gaussian blob "
+  "whose width is max(physical return width, 1.5·max(dx,dz)). For this grid the floor term "
+  "(8.65 m) dominates the physical return width (2.50 m) by a factor of 3.5, so the blob "
+  "extends over roughly a third of the water column. Three consequences follow, and they "
+  "must be understood before the vertical figures are interpreted:")
+for b in [
+    f"Peak salinity is prescribed. S_max = {g('S_max', 0):.4f} g/kg is exactly "
+    f"S_source = S_amb,bed + (S₀ − S_amb,bed)/S_r. The model is reporting its own boundary "
+    f"condition back to us; it is not a predicted maximum.",
+    f"Minimum dilution is a datum artefact. Dilution is evaluated against the local "
+    f"depth-varying ambient. The blob carries S_source up into water whose ambient is "
+    f"fresher (35.4 rather than 35.6 g/kg), so the same absolute salinity reports "
+    f"{g('dilution_min', 0):.0f}:1 there instead of the {g('nf_return_dilution', 0):.0f}:1 "
+    f"handed over by the near field. The plume does not re-concentrate.",
+    "Near the source the plume is not bottom-trapped. In the source column the salinity is "
+    "vertically uniform at S_source from the bed to within 0.48 m of the sea surface. "
+    "Bed-intensification appears only downstream: at 55 m the bed excess is 0.56 g/kg "
+    "against 0.15 g/kg at the surface. The bottom-trapped gravity current is real, but it is "
+    "a far-field feature of this run, not a near-source one.",
+]:
+    bullet(b)
+P("Datum warning. In plume_envelope_vs_distance.csv the column layer_top_depth_m is a DEPTH "
+  "BELOW THE SEA SURFACE (postprocess.py computes it as −min(z) over the impacted column), "
+  "not a height above the seabed. Its constant value of 0.48 m therefore means the impacted "
+  "layer reaches to within 0.48 m of the SURFACE — the opposite of a thin near-bed sheet. "
+  "The companion column layer_thickness_m ≈ 23.08 m, in 25 m of water, says the same thing. "
+  "Likewise core_depth_m rises from 4.33 m (near-surface) at the first station to 24.52 m "
+  "(on the bed) only beyond ~37 m downstream. Earlier drafts of this study, and of the "
+  "slide deck, misread this column as a height above bed and concluded that the surface "
+  "waters were unaffected; that conclusion is withdrawn.", italic=True, color=TEAL)
+P("The fix is to make the source-blob floor anisotropic — 1.5·dz vertically rather than "
+  "1.5·max(dx,dz) — which for dz = 0.96 m gives a vertical σ of 1.44 m, comparable with the "
+  "physical 2.50 m. Until that is done and the case re-run, the vertical extent of the "
+  "plume in this study is a property of the grid, not of the ocean.", italic=True, color=TEAL)
 
 # ============================================================ 13 FIGURES
 H("13.  Output figures, curves and contours")
@@ -476,7 +598,8 @@ figs = [
      "with the ΔS_crit assessment contour."),
     ("map_seabed_dilution.png", "Figure 2 — Predicted seabed brine dilution (plan view)."),
     ("section_centerline_xz.png", "Figure 3 — Vertical section of excess salinity along the plume "
-     "centreline, showing the bottom-trapped dense gravity-current layer."),
+     "centreline. The bed-intensified gravity-current layer is visible downstream; near the "
+     "source the column is vertically uniform because of the over-wide source blob (§12.4)."),
     ("map_seabed_currents.png", "Figure 4 — Near-bed current field driving the gravity-current spreading."),
     ("map_exceedance_probability.png", "Figure 5 — Exceedance-probability map for ΔS_crit across the "
      "stochastic ensemble."),
@@ -487,8 +610,10 @@ figs = [
      "with distance from the diffuser."),
     ("plot_seabed_centerline_transect.png", "Figure 9 — Seabed centreline transect (excess & dilution)."),
     ("plot_isopleth_area_vs_threshold.png", "Figure 10 — Seabed footprint area vs threshold."),
-    ("plot_plume_envelope_vs_distance.png", "Figure 11 — Dense-layer envelope (core depth, top, "
-     "thickness) vs distance."),
+    ("plot_plume_envelope_vs_distance.png", "Figure 11 — Dense-layer envelope vs distance. Core "
+     "depth, layer top and thickness are DEPTHS BELOW THE SEA SURFACE, not heights above the "
+     "bed: layer top ≈ 0.48 m means the impacted layer reaches to within 0.48 m of the "
+     "surface, and thickness ≈ 23.08 m in 25 m of water (§12.4)."),
     ("plot_vertical_profiles_stations.png", "Figure 12 — Vertical profiles at named stations."),
     ("plot_metrics_timeseries.png", "Figure 13 — Time series of headline metrics (approach to steady state)."),
 ]
@@ -502,7 +627,8 @@ for nm, desc in [
     ("anim_time_plume.gif", "time evolution of the depth-max excess-salinity plume "
      "(0 → 200 s) as it develops and spreads from the diffuser"),
     ("anim_depth_slices.gif", "horizontal excess-salinity slices swept from the sea surface "
-     "down to the seabed (shows the plume is bottom-trapped)"),
+     "down to the seabed (shows the plume is bed-intensified downstream, and vertically "
+     "uniform in the source column — see §12.4)"),
     ("anim_cross_sections.gif", "vertical excess-salinity sections swept alongshore across "
      "the plume (shows the 3-D dense-layer envelope)"),
     ("anim_footprint_threshold.gif", "seabed footprint contour as the assessment threshold "
@@ -523,7 +649,8 @@ data_files = [
     ("seabed_lateral_transect.csv", "CSV", "seabed ΔS & dilution across the plume"),
     ("isopleth_area_vs_threshold.csv", "CSV", "footprint area / equivalent radius vs ΔS threshold"),
     ("vertical_profiles_stations.csv", "CSV", "S, ΔS, dilution, ρ, T profiles at named stations"),
-    ("plume_envelope_vs_distance.csv", "CSV", "dense-layer core depth, top and thickness vs distance"),
+    ("plume_envelope_vs_distance.csv", "CSV", "dense-layer core depth, top and thickness vs "
+     "distance (all DEPTHS BELOW SURFACE, not heights above bed — see §12.4)"),
     ("nearfield_trajectory.csv", "CSV", "inclined dense-jet centreline trajectory"),
     ("fields_final.npz", "NPZ", "primary & derived 3-D fields (S, ΔS, dilution, ρ, u,v,w, k, ε, ν_t, T)"),
     ("ensemble_stats.npz", "NPZ", "ensemble mean/std/exceedance and percentile fields"),
@@ -534,30 +661,67 @@ table(["File", "Type", "Contents"], [[a, b, c] for a, b, c in data_files],
 
 # ============================================================ 15 ASSESSMENT
 H("15.  Assessment and mixing-zone compliance")
-P(f"The calibrated model predicts a seabed excess-salinity footprint above the "
-  f"conservative sub-lethal assessment contour ΔS = {C['dS_crit']} g/kg of "
-  f"≈ {g('seabed_footprint_m2', 0):.0f} m², confined within ≈ {g('r_max_m', 0):.0f} m of "
-  f"the diffuser, with a minimum far-field dilution of {g('dilution_min', 0):.0f}:1. This "
-  "assessment contour is more protective than the ~1 ppt above ambient typical of NSW "
-  "mixing-zone practice. Because the near-field is anchored to validated laboratory "
-  "scaling and the far-field is calibrated to the site survey (and shown conservative "
-  "against the Perth field transect), these figures are defensible for screening-level "
-  "assessment.")
+P(f"The model predicts a seabed excess-salinity footprint above the conservative sub-lethal "
+  f"assessment contour ΔS = {C['dS_crit']} g/kg of ≈ {g('seabed_footprint_m2', 0):.0f} m², "
+  f"within roughly {g('r_max_m', 0):.0f}–{ss.get('r_max_m_mean', 0):.0f} m of the diffuser. "
+  f"This assessment contour is more protective than the ~1 ppt above ambient typical of NSW "
+  f"mixing-zone practice.")
+P(f"The compliance conclusion is robust; the footprint precision is not. The maximum excess "
+  f"salinity anywhere in the domain is {g('excess_max', 0):.2f} g/kg and the maximum on the "
+  f"seabed is 0.84 g/kg, so the discharge sits inside every applicable concentration limit "
+  f"with margin — NSW ~1 ppt at the mixing-zone edge, Perth 1.2 ppt at 50 m, Gold Coast "
+  f"~2 PSU at 60 m, and the binding California Ocean Plan 2.0 ppt at 100 m. That conclusion "
+  f"survives every caveat in §1.1. What does not survive is the implied precision of "
+  f"'{g('seabed_footprint_m2', 0):.0f} m² within {g('r_max_m', 0):.0f} m': the reach had not "
+  f"converged when the run stopped, and the footprint depends on which estimator and which "
+  f"field (single-member or ensemble-mean) is used.")
+P("Basis of confidence, stated exactly. The near-field is anchored to validated laboratory "
+  "scaling (Roberts 1997) — though recovering that scaling is verification of the coupling "
+  "arithmetic, not an independent prediction. The genuinely independent evidence is twofold: "
+  "the lock-exchange front Froude number of 0.47 against Benjamin's 0.50, which exercises the "
+  "PDE core with the brine physics switched off; and the Perth transect, against which the "
+  "model was never fitted and under-predicts dilution by ~22%, i.e. errs toward over-stating "
+  "impact. The far field is NOT calibrated to measured data (§10). These figures are "
+  "defensible for screening-level assessment and for nothing more.")
 
 # ============================================================ 16 CONCLUSIONS
 H("16.  Conclusions and recommendations")
 for b in [
     "The SDP Kurnell deep multiport diffuser is predicted to confine the seabed "
     f"excess-salinity footprint (ΔS > {C['dS_crit']} g/kg) to ≈ {g('seabed_footprint_m2', 0):.0f} m² "
-    f"within ≈ {g('r_max_m', 0):.0f} m of the outfall.",
-    "The model is calibrated to a site CTD/ADCP transect and validated against laboratory, "
-    "field and analytical benchmarks; run health is exact (machine-precision continuity, "
-    "conserved mass, no eddy-viscosity railing).",
-    "Recommendation (i): commission a real CTD/ADCP survey at the outfall and re-run "
-    "--calibrate-ctd to convert these representative numbers into a site-measured prediction.",
-    "Recommendation (ii): run worst-case weak-mixing scenarios (low current, strong "
-    "stratification) to bound the compliance envelope.",
-    "Recommendation (iii): for a fully resolved near field, use the two-way nested "
+    f"within roughly {g('r_max_m', 0):.0f}–{ss.get('r_max_m_mean', 0):.0f} m of the outfall. The "
+    f"salinity anomaly is inside every applicable regulatory limit with substantial margin.",
+    "The solver is validated against laboratory, field and analytical benchmarks and its "
+    "numerics are sound: 13/13 self-tests, machine-precision continuity, conserved mass and "
+    "no eddy-viscosity railing. Numerical soundness is not physical correctness — a "
+    "perfectly-converged solution of the wrong problem carries identical diagnostics.",
+    "The far field is NOT calibrated. The dispersivity multiplier returned 1.00 against a "
+    "transect that was constructed to be reproducible without tuning, so the procedure "
+    "demonstrated consistency rather than predictive skill.",
+    "Near the source the plume is not bottom-trapped: the source column is vertically uniform "
+    "at the injected salinity. This is an artefact of the grid-limited source blob (§12.4) "
+    "and it inflates the reported peak salinity, minimum dilution and affected volume.",
+    "Steady state was not reached for the horizontal reach, which grew monotonically from "
+    "26 m to 96 m and was still increasing when the run stopped at "
+    f"{C['t_end']:.0f} s — about 8% of one domain flush time.",
+    "Recommendation (i): make the source-blob floor anisotropic (1.5·dz vertically rather "
+    "than 1.5·max(dx,dz)) and re-run. This is a one-line change and it is the single most "
+    "consequential fix, because it contaminates four reported quantities at once.",
+    f"Recommendation (ii): extend the run to at least one domain flush time (≈ 2,500 s vs the "
+    f"{C['t_end']:.0f} s used here) and adopt a steady-state test that bounds the trend over "
+    f"the window, not merely the relative scatter.",
+    "Recommendation (iii): enable bottom drag. A free-slip seabed under a bottom gravity "
+    "current biases the reach long and the layer thin, and that error is anti-conservative.",
+    "Recommendation (iv): commission a real CTD/ADCP survey at the outfall and re-run "
+    "--calibrate-ctd — or adopt the measured Gold Coast Tugun transect (Baum et al. 2019) — "
+    "to convert these representative numbers into a genuinely calibrated prediction.",
+    "Recommendation (v): raise the ensemble to O(100) members run over several "
+    "Ornstein–Uhlenbeck correlation times before any exceedance-probability map is quoted.",
+    "Recommendation (vi): run worst-case weak-mixing scenarios (low current, strong "
+    "stratification) to bound the compliance envelope, and a sensitivity case at the Lai & "
+    "Lee (2012) near-field constant S_i/Fr = 1.07, which is the less-protective of the two "
+    "literature clusters.",
+    "Recommendation (vii): for a fully resolved near field, use the two-way nested "
     "resolved-nearfield mode on a GPU.",
 ]:
     bullet(b)

@@ -1,5 +1,5 @@
 {
-  "_case": "Sydney Desalination Plant (Kurnell, NSW) — offshore Tasman-shelf submerged multiport brine diffuser. CALIBRATED (site CTD/ADCP transect) + VALIDATED (Roberts 1997 lab scaling, Perth field transect, lock-exchange PDE benchmark).",
+  "_case": "Sydney Desalination Plant (Kurnell, NSW) — offshore Tasman-shelf submerged multiport brine diffuser. VALIDATED (Roberts 1997 lab scaling, Perth field transect, lock-exchange PDE benchmark). NOT CALIBRATED: the far-field dispersivity multiplier returned 1.00 against a representative, constructed transect (see make_site_data.py), so no fitting was performed. Grid/ensemble/t_end below are the values that produced case_study/outputs/.",
   "_provenance_public": "Public design basis: SDP Kurnell, product capacity 250 ML/day (expandable to 500 ML/day), SWRO recovery ~47%, brine returned through an offshore diffuser on the open Tasman Sea shelf in ~25 m water via tunnelled risers with inclined multiport rosette heads. Ambient open-ocean salinity ~35.4-35.6 psu; summer thermocline ~18-21 C. NSW mixing-zone practice limits the salinity anomaly to ~1 ppt above ambient at the mixing-zone boundary.",
   "_assumptions_engineering": "Per-port nozzle geometry and the concentrate split are a REPRESENTATIVE deep-diffuser configuration consistent with the public capacity/recovery and a 60-deg inclined-dense-jet design, NOT measured per-port data. Mass balance: feed = 250/0.47 = 532 ML/day, concentrate = 282 ML/day = 3.26 m3/s; concentrate salinity = 35.5/(1-0.47) ~= 67 psu. Per-port Q_d = 3.26/72 = 0.0453 m3/s, U_d ~= 4.0 m/s at d_p = 0.12 m. Site-specific bathymetry/CTD/ADCP/wave/wind decks in case_study/inputs/ (credible representative survey).",
 
@@ -32,8 +32,8 @@
   "bathy_slope": 0.006,
   "Lx": 300.0,
   "Ly": 120.0,
-  "nx": 56,
-  "ny": 34,
+  "nx": 52,
+  "ny": 32,
   "nz": 26,
   "x_src_frac": 0.15,
   "y_src_frac": 0.5,
@@ -51,11 +51,11 @@
   "stoch_enable": true,
   "stoch_sigma": 0.02,
   "stoch_length": 30.0,
-  "ensemble": 5,
+  "ensemble": 2,
   "seed": 20240617,
 
   "time_order_2": false,
-  "t_end": 260.0,
+  "t_end": 200.0,
   "save_every": 20.0,
   "make_figures": true,
   "n_snapshots": 0,
