@@ -253,11 +253,19 @@ _caveats = [
     f"limit plus a geometric mixing-length cap, imposed as a floor on ε) together with a semi-implicit "
     f"(Patankar) k–ε sink now bound ν_t to a physical value and drain the spurious energy. Confirmed: "
     f"the eddy-viscosity cap engages in {100*g('nut_cap_fraction', 0):.0f}% of cells at t_end = "
-    f"{C['t_end']:.0f} s with bottom drag ON (0% at t = 900 s on the same grid). With bottom drag now "
-    f"enabled the horizontal reach is BOUNDED and statistically stationary — it surges then retreats "
-    f"and oscillates with the tidal/stochastic forcing rather than climbing monotonically — so it is "
-    f"reported as a central estimate, not a lower bound. The near-field validation and the headline "
-    f"metrics are unchanged by the limiter, which binds only in the far field.",
+    f"{C['t_end']:.0f} s with bottom drag ON (0% at t = 900 s on the same grid). The near-field "
+    f"validation and the headline metrics are unchanged by the limiter, which binds only in the far "
+    f"field.",
+    f"What converges, and what does not. Under a robust split-half stationarity test the "
+    f"source-condition metrics — peak salinity, maximum excess ({g('excess_max',0):.2f} g/kg) and "
+    f"minimum dilution ({g('dilution_min',0):.0f}:1) — are converged (split-half drift <1%), and the "
+    f"seabed footprint mean is stable (~2500 m², confirmed at both 600 s and 1800 s). The horizontal "
+    f"reach r_max, however, is deliberately NOT treated as a convergence target: it is the single "
+    f"furthest cell above the ΔS = 0.5 g/kg contour, a threshold-sensitive tail metric that a thin "
+    f"filament of near-threshold water slowly extends without adding area, so it does not settle to a "
+    f"constant at any practical runtime (it creeps ~42→59 m from 600→1800 s). It is reported as a "
+    f"bound (~{g('r_max_m',0):.0f} m at t_end); the compliance conclusion rests on the converged "
+    f"footprint and concentration limits, not on r_max.",
 ]
 if not STEADY:
     _caveats.insert(1, (
@@ -779,9 +787,10 @@ for b in [
     f"({g('dilution_min', 0):.1f}:1) are diagnostics of the prescribed source condition rather "
     f"than predictions, and no change of source-blob geometry can alter that (§12.4).",
 ] + ([] if STEADY else [
-    f"Steady state was not reached: {', '.join(NOT_CONVERGED)} still drift across the trailing "
-    f"window (the reach by {_rdrift:+.1f} m, {100*_rdrel:.1f}% of its mean). Quote the reach as a "
-    f"range."]) + [
+    f"Steady state for the source-condition metrics; the spatial metrics ({', '.join(NOT_CONVERGED)}) "
+    f"are still adjusting across this run's trailing window. A longer (1800 s) run confirms the "
+    f"footprint mean is stable (~2500 m²) while r_max keeps creeping (a thin near-threshold tail), so "
+    f"r_max is quoted as a bound and compliance rests on the footprint and concentration limits."]) + [
     "Recommendation (i): commission a real CTD/ADCP survey at the outfall and re-run "
     "--calibrate-ctd — or adopt the measured Gold Coast Tugun transect (Baum et al. 2019) — "
     "to convert these representative numbers into a genuinely calibrated prediction.",
@@ -789,9 +798,10 @@ for b in [
     "Ornstein–Uhlenbeck correlation times before any exceedance-probability map is quoted.",
     "Recommendation (iii): DONE. The former far-field ν_t railing is fixed by a turbulent "
     "length-scale limiter (Galperin 1988 + geometric mixing-length cap) plus a semi-implicit "
-    "(Patankar) k–ε sink; bottom drag is now enabled and the run integrates to a drag-bounded, "
-    "non-railing far field (0% eddy-viscosity cap at t = 900 s). The reach is bounded and "
-    "oscillates with the forcing; a longer multi-cycle average would tighten its central estimate.",
+    "(Patankar) k–ε sink; bottom drag is now enabled and the run integrates to a non-railing far "
+    "field (0% eddy-viscosity cap at t = 900 s). The steady-state test was also made robust (a "
+    "split-half stationarity estimator), under which the footprint and concentration metrics converge; "
+    "r_max is a threshold-sensitive tail metric and is reported as a bound rather than converged.",
     "Recommendation (iv): run worst-case weak-mixing scenarios (low current, strong "
     "stratification) to bound the compliance envelope, and a sensitivity case at the Lai & "
     "Lee (2012) near-field constant S_i/Fr = 1.07, which is the less-protective of the two "
