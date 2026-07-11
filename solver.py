@@ -3263,8 +3263,23 @@ def write_outputs(cfg, grid, member_states, log, outdir):
                     drift = slope * float(tsec[-1] - tsec[0])
                 steady[key + "_drift"] = float(drift)
                 steady[key + "_drift_rel"] = float(abs(drift) / max(abs(mu), 1e-12))
+                # ROBUST stationarity drift: difference between the mean of the second
+                # half of the window and the first half. For a stationary but OSCILLATING
+                # signal (a stochastically-forced quantity that fluctuates about a stable
+                # mean, e.g. a drag-limited gravity-current front), a least-squares slope
+                # is dominated by which phase of the oscillation the window endpoints
+                # happen to fall on and reports spurious "drift"; comparing half-window
+                # means averages the oscillation out and isolates a genuine slow trend.
+                # The convergence flag uses this robust estimator.
+                half = vals.size // 2
+                if half >= 1:
+                    drift_sh = float(vals[-half:].mean() - vals[:half].mean())
+                else:
+                    drift_sh = drift
+                steady[key + "_drift_splithalf"] = drift_sh
+                steady[key + "_drift_splithalf_rel"] = float(abs(drift_sh) / max(abs(mu), 1e-12))
                 ok_scatter = abs(sd) <= cfg.steady_tol * abs(mu) + 1e-9
-                ok_trend = abs(drift) <= cfg.steady_trend_tol * abs(mu) + 1e-9
+                ok_trend = abs(drift_sh) <= cfg.steady_trend_tol * abs(mu) + 1e-9
                 steady["converged"][key] = bool(ok_scatter and ok_trend)
         steady["steady_state_reached"] = bool(steady["converged"] and
                                               all(steady["converged"].values()))
