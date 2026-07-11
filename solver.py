@@ -855,6 +855,11 @@ class Config:
     # converged/NOT-converged verdict. Purely a reporting change.
     steady_frac: float = 0.34      # fraction of the run (tail) used for the stats
     steady_tol: float = 0.20       # rel. std below which a metric is "steady"
+    # A relative-SCATTER test alone cannot detect a monotonically DRIFTING metric:
+    # a quantity that climbs steadily across the window has small std about its own
+    # mean and passes, while plainly not being steady. A metric must therefore ALSO
+    # show no significant linear trend: |slope * window_length| <= steady_trend_tol*|mean|.
+    steady_trend_tol: float = 0.05  # rel. drift across the window allowed for "steady"
     # Centerline-curve robustification (cleans the Tier-5 curve only):
     centerline_track_core: bool = True   # follow the true plume core, not a fixed row
     centerline_clip_upcurrent: bool = True  # drop the no-plume up-current branch
@@ -1009,9 +1014,21 @@ class Grid:
             Hr = float(np.clip(cfg.bathy_min_depth + cfg.bathy_slope * xr, 1.0, cfg.depth))
             zr = -Hr + max(cfg.nozzle_height, 0.5 * self.dz)
             self.src_xyz = (xr, yr, zr)
-            width = max(self.nearfield["width_return"], 1.5 * max(self.dx, self.dz))
-            r2 = (self.X - xr) ** 2 + (self.Y - yr) ** 2 + (self.Z - zr) ** 2
-            self.src = np.exp(-r2 / (2.0 * width ** 2)) * self.fluid
+            # ANISOTROPIC source-blob extent. The horizontal extent is floored at the grid
+            # scale, because a source narrower than a cell is unresolvable and its spreading
+            # would be grid-dependent. The VERTICAL extent must NOT be floored the same way:
+            # an isotropic floor of 1.5*max(dx,dz) is set by dx (5.8 m here), which in 25 m of
+            # water smeared the return plume over a third of the column, drove the whole source
+            # column to S_source, and destroyed the near-source bottom-trapping the near-field
+            # model had just established. The vertical scale is the physical return-plume
+            # half-width, floored only at the cell height.
+            width_h = max(self.nearfield["width_return"], 1.5 * max(self.dx, self.dy))
+            width_v = max(self.nearfield["width_return"], 1.5 * self.dz)
+            width = width_h                      # horizontal scale (also sets U_src below)
+            rh2 = (self.X - xr) ** 2 + (self.Y - yr) ** 2
+            rv2 = (self.Z - zr) ** 2
+            self.src = np.exp(-0.5 * (rh2 / width_h ** 2
+                                      + rv2 / width_v ** 2)) * self.fluid
             self.S_source = S_amb_bed + (cfg.S0 - S_amb_bed) / self.nearfield["dilution_return"]
             self.T_source = T_amb_bed + (cfg.T_b - T_amb_bed) / self.nearfield["dilution_return"]
             # residual gravity-current velocity (spreads, no longer a jet)
@@ -2776,6 +2793,14 @@ class NereidSolver:
         # float() the device reductions so this scalar dt arithmetic stays on the host
         # (a CuPy 0-d scalar must not reach the module-level np.clip below).
         uh = max(float(abs(self.u).max()), float(abs(self.v).max()), 1e-6)
+        # NOTE: g.U_d (nozzle exit velocity) is retained in the advective CFL even
+        # though the coupled far field never carries it. It is not a true advective
+        # limit here; it acts as a conservative timestep cap that keeps the EXPLICIT
+        # k-epsilon production/sink update (see _update_turbulence) stable. Removing
+        # it lets dt grow ~2.5x and the explicit turbulence source overshoots, railing
+        # nut against nut_max in stratified cells — the exact over-mixing this model
+        # exists to avoid. A proper fix is a semi-implicit k-eps sink; until then this
+        # cap stays.
         umax = max(uh, float(abs(self.w).max()), g.U_d, 1e-6)
         dt_adv = cfg.cfl * min(dx, dy, dz) / umax
         # anisotropic diffusion limit using the actual max diagonal diffusivities
@@ -3153,6 +3178,7 @@ def write_outputs(cfg, grid, member_states, log, outdir):
         tail = hist[-ntail:]
         steady = {"window_s": [float(tail[0]["t_s"]), float(tail[-1]["t_s"])],
                   "n_samples": len(tail), "converged": {}}
+        tsec = np.array([float(t["t_s"]) for t in tail])
         for key in ("S_max", "excess_max", "r_max_m", "z_deepest_m",
                     "seabed_footprint_m2", "dilution_min"):
             vals = np.array([t[key] for t in tail if np.isfinite(t.get(key, np.nan))])
@@ -3160,7 +3186,17 @@ def write_outputs(cfg, grid, member_states, log, outdir):
                 mu = float(vals.mean()); sd = float(vals.std())
                 steady[key + "_mean"] = mu
                 steady[key + "_std"] = sd
-                steady["converged"][key] = bool(abs(sd) <= cfg.steady_tol*abs(mu) + 1e-9)
+                # linear drift across the window (least squares); a metric that is
+                # still climbing is NOT steady however small its scatter happens to be.
+                drift = 0.0
+                if vals.size >= 2 and tsec.size == vals.size and tsec.ptp() > 0:
+                    slope = float(np.polyfit(tsec, vals, 1)[0])
+                    drift = slope * float(tsec[-1] - tsec[0])
+                steady[key + "_drift"] = float(drift)
+                steady[key + "_drift_rel"] = float(abs(drift) / max(abs(mu), 1e-12))
+                ok_scatter = abs(sd) <= cfg.steady_tol * abs(mu) + 1e-9
+                ok_trend = abs(drift) <= cfg.steady_trend_tol * abs(mu) + 1e-9
+                steady["converged"][key] = bool(ok_scatter and ok_trend)
         steady["steady_state_reached"] = bool(steady["converged"] and
                                               all(steady["converged"].values()))
         metrics["steady_state"] = steady

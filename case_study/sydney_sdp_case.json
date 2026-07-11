@@ -1,5 +1,6 @@
 {
   "_case": "Sydney Desalination Plant (Kurnell, NSW) — offshore Tasman-shelf submerged multiport brine diffuser. VALIDATED (Roberts 1997 lab scaling, Perth field transect, lock-exchange PDE benchmark). NOT CALIBRATED: the far-field dispersivity multiplier returned 1.00 against a representative, constructed transect (see make_site_data.py), so no fitting was performed. Grid/ensemble/t_end below are the values that produced case_study/outputs/.",
+  "_runlength_note": "t_end=200 s is a deliberate choice. The anisotropic source blob gives a bottom-trapped plume with physical turbulence (0% eddy-viscosity railing) over the near/mid-field mixing zone (tens of metres) that governs compliance. Bottom drag plus longer integration (400-900 s) was tested to converge the far-field horizontal reach, but the far-field k-epsilon develops a slow spurious eddy-viscosity growth that rails nut against nut_max past ~400 s and over-mixes the thin residual plume. Rather than ship a railed run, the headline run stops at 200 s; the reach is reported as a developing lower bound and the far-field k-eps growth is documented as a limitation (a semi-implicit k-eps sink is the proper fix). bottom_drag is available and physically correct for a converged far field but is left off here for that reason.",
   "_provenance_public": "Public design basis: SDP Kurnell, product capacity 250 ML/day (expandable to 500 ML/day), SWRO recovery ~47%, brine returned through an offshore diffuser on the open Tasman Sea shelf in ~25 m water via tunnelled risers with inclined multiport rosette heads. Ambient open-ocean salinity ~35.4-35.6 psu; summer thermocline ~18-21 C. NSW mixing-zone practice limits the salinity anomaly to ~1 ppt above ambient at the mixing-zone boundary.",
   "_assumptions_engineering": "Per-port nozzle geometry and the concentrate split are a REPRESENTATIVE deep-diffuser configuration consistent with the public capacity/recovery and a 60-deg inclined-dense-jet design, NOT measured per-port data. Mass balance: feed = 250/0.47 = 532 ML/day, concentrate = 282 ML/day = 3.26 m3/s; concentrate salinity = 35.5/(1-0.47) ~= 67 psu. Per-port Q_d = 3.26/72 = 0.0453 m3/s, U_d ~= 4.0 m/s at d_p = 0.12 m. Site-specific bathymetry/CTD/ADCP/wave/wind decks in case_study/inputs/ (credible representative survey).",
 
@@ -44,6 +45,10 @@
   "realizable_keps": true,
   "buoyancy_damping_fix": true,
   "farfield_disp_cal": 1.0,
+
+  "bottom_drag": false,
+  "wall_function": false,
+  "Cd_bed": 0.0025,
 
   "dS_crit": 0.5,
   "footprint_thresholds": [0.1, 0.25, 0.5, 0.75, 1.0],
