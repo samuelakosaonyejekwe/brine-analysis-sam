@@ -234,7 +234,7 @@ _caveats = [
     f"not be used as an uncertainty bound.",
     "The far field is not calibrated. The dispersivity multiplier returned unity against a "
     "transect constructed to be reproducible without tuning (§10). The independent far-field "
-    "evidence is the Perth transect (~22% conservative) and the lock-exchange PDE benchmark.",
+    "evidence is the Perth transect (~16–25% conservative) and the lock-exchange PDE benchmark.",
     "Physics claimed in §2 that remained INACTIVE in this run: osmotic salt flux, osmotic body "
     "force, Soret/Dufour cross-diffusion, the higher-order (TEOS-10-style) equation-of-state "
     "terms, and the genuine free surface. The run used near-field coupling, full-tensor "
@@ -570,7 +570,7 @@ table(["Level", "Benchmark / data (source)", "Accepted value", "NEREID-B result"
         % (round(min(g('r_max_m', 0), ss.get('r_max_m_mean', 0))),
            round(max(g('r_max_m', 0), ss.get('r_max_m_mean', 0))))],
        ["PDE core", "Lock-exchange front Froude number — Benjamin (1968); Shin et al. (2004)",
-        "F_H = 0.50", "Fr_f ≈ 0.47 — PASS"],
+        "F_H = 0.50", "Fr_f ≈ 0.51 — PASS"],
        ["Robustness", "Invariants: mass/positivity/divergence/EOS/restart — solver.py",
         "exact / bounded", "13/13 self-tests PASS"]],
       caption="Table 11.1 — Validation summary (verified sources; see §17 and validation/sources.md). "
@@ -760,9 +760,9 @@ P(f"The compliance conclusion is robust. The maximum excess salinity anywhere in
 P("Basis of confidence, stated exactly. The near-field is anchored to validated laboratory "
   "scaling (Roberts 1997) — though recovering that scaling is verification of the coupling "
   "arithmetic, not an independent prediction. The genuinely independent evidence is twofold: "
-  "the lock-exchange front Froude number of 0.47 against Benjamin's 0.50, which exercises the "
+  "the lock-exchange front Froude number of 0.51 against Benjamin's 0.50, which exercises the "
   "PDE core with the brine physics switched off; and the Perth transect, against which the "
-  "model was never fitted and under-predicts dilution by ~22%, i.e. errs toward over-stating "
+  "model was never fitted and under-predicts dilution by ~16–25%, i.e. errs toward over-stating "
   "impact. The far field is NOT calibrated to measured data (§10). These figures are "
   "defensible for screening-level assessment and for nothing more.")
 
