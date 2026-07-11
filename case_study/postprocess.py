@@ -177,15 +177,22 @@ for i in range(nx):
     active = fl & (col > 0.05 * max(col.max(), 1e-6)) & (col > 0.02)
     if not active.any():
         continue
+    # z is height (<=0, surface at 0), so -z is DEPTH BELOW SURFACE. Every quantity
+    # written below is a depth below the surface, NOT a height above the seabed.
     za = z[active]
-    top = float(-za.min())          # shallowest (top of layer) depth
-    bot = float(-za.max())          # deepest
-    thick = abs(top - bot)
+    d_deep = float(-za.min())       # largest depth  = bottom of the impacted layer
+    d_shal = float(-za.max())       # smallest depth = top of the impacted layer
+    thick = abs(d_deep - d_shal)
     kcore = int(np.argmax(np.where(fl, col, -1)))
-    rows.append([f"{dx:.2f}", f"{-z[kcore]:.2f}", f"{min(top, bot):.2f}",
+    rows.append([f"{dx:.2f}", f"{-z[kcore]:.2f}", f"{d_shal:.2f}",
                  f"{thick:.2f}", f"{col.max():.4f}"])
+# NOTE ON DATUM: core_depth_m and layer_top_depth_m are DEPTHS BELOW THE SEA SURFACE.
+# layer_top_depth_m = 0.48 therefore means the impacted layer reaches to within 0.48 m of
+# the SURFACE — it does NOT mean the layer top sits 0.48 m above the bed. Read alongside
+# layer_thickness_m (~23 m in 25 m of water) before describing the plume as bottom-trapped.
 wcsv("plume_envelope_vs_distance.csv",
-     ["distance_m", "core_depth_m", "layer_top_depth_m", "layer_thickness_m", "peak_excess_gkg"], rows)
+     ["distance_m", "core_depth_below_surface_m", "layer_top_depth_below_surface_m",
+      "layer_thickness_m", "peak_excess_gkg"], rows)
 
 # ---- 6. near-field inclined-dense-jet trajectory (from validated correlations) --
 nf_rise = met.get("nf_rise_m", met.get("plume_rise_m", 6.4))

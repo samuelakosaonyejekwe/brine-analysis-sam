@@ -687,6 +687,32 @@ class Config:
     # the production strain invariant S2 (= 2 S_ij S_ij). Set False for raw Cmu k^2/eps.
     realizable_keps: bool = True
     realiz_Cr: float = 0.6     # Durbin realizability constant (O(1))
+    # TURBULENT LENGTH-SCALE LIMITER (Galperin et al. 1988 + geometric mixing-length
+    # cap; default-on). ROOT-CAUSE FIX for the far-field eddy-viscosity railing. In the
+    # weakly-stratified, low-strain far field NEITHER the Durbin strain-realizability
+    # bound NOR a buoyancy bound binds, so nut = Cmu k^2/eps runs free: a slow
+    # production imbalance pumps k to O(1) m^2/s^2 (turbulent velocity ~ the mean flow,
+    # unphysical) and nut rails to nut_max past ~500 s. Bounding the turbulent length
+    # scale L = Cmu^0.75 k^1.5/eps by L_max = min(c_b*sqrt(2k)/N [buoyancy, where
+    # stratified], kappa*d_wall capped at lambda*H [geometric]) -- imposed as a FLOOR on
+    # eps -- caps nut to a PHYSICAL value and drains the spurious k. This is the standard
+    # ocean-model closure limit (GOTM/Mellor-Yamada); it binds only where the length
+    # scale is unphysically large, so healthy near-field/high-strain turbulence is
+    # untouched (verified: near-field lab validation and headline metrics unchanged).
+    strat_length_limit: bool = True
+    galperin_cb: float = 0.53      # Galperin (1988) stable-stratification length coeff
+    mixlen_lambda: float = 0.22    # geometric mixing-length cap as a fraction of depth
+    # SEMI-IMPLICIT k-eps SINK (Patankar 1980; default-on). The dissipation sink of
+    # the k-equation (-eps) and the quadratic sink of the eps-equation (-C2 eps^2/k)
+    # were stepped EXPLICITLY, so at long integration times (past ~400 s) the
+    # quadratic eps sink overshoots, eps collapses toward its clip floor, and
+    # nut = Cmu k^2/eps blows up to nut_max (spurious far-field eddy-viscosity
+    # railing). Linearising the destruction terms implicitly about the current state
+    # -- phi_new = (phi + dt*Production) / (1 + dt*Destruction/phi) -- is
+    # unconditionally positive and non-oscillatory, so the closure integrates
+    # stably to steady state with no dt-dependent railing. Stable stratification
+    # damping (Gb<0) is moved into the implicit k sink for the same reason.
+    semi_implicit_keps: bool = True
 
     # ---- stochastic layer (Class D statistics, salinity.docx Eq.3.7) -------
     stoch_enable: bool = True
@@ -855,6 +881,11 @@ class Config:
     # converged/NOT-converged verdict. Purely a reporting change.
     steady_frac: float = 0.34      # fraction of the run (tail) used for the stats
     steady_tol: float = 0.20       # rel. std below which a metric is "steady"
+    # A relative-SCATTER test alone cannot detect a monotonically DRIFTING metric:
+    # a quantity that climbs steadily across the window has small std about its own
+    # mean and passes, while plainly not being steady. A metric must therefore ALSO
+    # show no significant linear trend: |slope * window_length| <= steady_trend_tol*|mean|.
+    steady_trend_tol: float = 0.05  # rel. drift across the window allowed for "steady"
     # Centerline-curve robustification (cleans the Tier-5 curve only):
     centerline_track_core: bool = True   # follow the true plume core, not a fixed row
     centerline_clip_upcurrent: bool = True  # drop the no-plume up-current branch
@@ -1009,9 +1040,21 @@ class Grid:
             Hr = float(np.clip(cfg.bathy_min_depth + cfg.bathy_slope * xr, 1.0, cfg.depth))
             zr = -Hr + max(cfg.nozzle_height, 0.5 * self.dz)
             self.src_xyz = (xr, yr, zr)
-            width = max(self.nearfield["width_return"], 1.5 * max(self.dx, self.dz))
-            r2 = (self.X - xr) ** 2 + (self.Y - yr) ** 2 + (self.Z - zr) ** 2
-            self.src = np.exp(-r2 / (2.0 * width ** 2)) * self.fluid
+            # ANISOTROPIC source-blob extent. The horizontal extent is floored at the grid
+            # scale, because a source narrower than a cell is unresolvable and its spreading
+            # would be grid-dependent. The VERTICAL extent must NOT be floored the same way:
+            # an isotropic floor of 1.5*max(dx,dz) is set by dx (5.8 m here), which in 25 m of
+            # water smeared the return plume over a third of the column, drove the whole source
+            # column to S_source, and destroyed the near-source bottom-trapping the near-field
+            # model had just established. The vertical scale is the physical return-plume
+            # half-width, floored only at the cell height.
+            width_h = max(self.nearfield["width_return"], 1.5 * max(self.dx, self.dy))
+            width_v = max(self.nearfield["width_return"], 1.5 * self.dz)
+            width = width_h                      # horizontal scale (also sets U_src below)
+            rh2 = (self.X - xr) ** 2 + (self.Y - yr) ** 2
+            rv2 = (self.Z - zr) ** 2
+            self.src = np.exp(-0.5 * (rh2 / width_h ** 2
+                                      + rv2 / width_v ** 2)) * self.fluid
             self.S_source = S_amb_bed + (cfg.S0 - S_amb_bed) / self.nearfield["dilution_return"]
             self.T_source = T_amb_bed + (cfg.T_b - T_amb_bed) / self.nearfield["dilution_return"]
             # residual gravity-current velocity (spreads, no longer a jet)
@@ -1982,9 +2025,35 @@ class NereidSolver:
         adv_e = self._advect(eps, cfg.Cmu * k_in ** 1.5 / (0.1 * cfg.depth))
         Dk = cfg.nu_mol + nut / cfg.sigma_k
         De = cfg.nu_mol + nut / cfg.sigma_e
-        e_over_k = eps / np.maximum(k, 1e-8)
+        kv = np.maximum(k, 1e-8)
+        e_over_k = eps / kv
+        # Split buoyancy production into an unstable SOURCE (Gb>0) and a stable-
+        # stratification SINK (Gb<0). The eps equation only sees the source part
+        # (standard C3*max(Gb,0)); the sink part damps k.
+        Gb_src = np.maximum(Gb, 0.0)
+        Gb_snk = np.maximum(-Gb, 0.0)
+        if cfg.semi_implicit_keps:
+            # PATANKAR semi-implicit: advection + production explicit; destruction
+            # linearised implicitly (unconditionally positive, non-oscillatory sink).
+            # This removes the long-time eps-collapse -> nut railing (see Config note).
+            src_k = adv_k + Pk + Gb_src
+            src_e = adv_e + e_over_k * cfg.C1 * (Pk + cfg.C3 * Gb_src)
+            if not cfg.implicit_diffusion:
+                src_k = src_k + (diffuse_1d(k, Dk, dx, 0, g.openx)
+                                 + diffuse_1d(k, Dk, dy, 1, g.openy)
+                                 + diffuse_1d(k, Dk, dz, 2, g.openz))
+                src_e = src_e + (diffuse_1d(eps, De, dx, 0, g.openx)
+                                 + diffuse_1d(eps, De, dy, 1, g.openy)
+                                 + diffuse_1d(eps, De, dz, 2, g.openz))
+            snk_k = (eps + Gb_snk) / kv          # k destruction rate (per unit k)
+            snk_e = cfg.C2 * e_over_k             # eps destruction rate (per unit eps)
+            k_new = (k + dt * src_k) / (1.0 + dt * np.maximum(snk_k, 0.0))
+            eps_new = (eps + dt * src_e) / (1.0 + dt * np.maximum(snk_e, 0.0))
+            if cfg.implicit_diffusion:
+                k_new = self._implicit_diag_diffuse(k_new, Dk, Dk, Dk, dt)
+                eps_new = self._implicit_diag_diffuse(eps_new, De, De, De, dt)
         # IMEX (C1): production/sink/advection explicit, diagonal diffusion implicit
-        if cfg.implicit_diffusion:
+        elif cfg.implicit_diffusion:
             k_new = k + dt * (adv_k + Pk + Gb - eps)
             k_new = self._implicit_diag_diffuse(k_new, Dk, Dk, Dk, dt)
             eps_new = eps + dt * (adv_e
@@ -2019,6 +2088,23 @@ class NereidSolver:
         self.k_cap_frac = float((k_new[g.fluid] >= cfg.k_max).mean())
         self.k = np.clip(k_new, 1e-8, cfg.k_max) * g.fluid + 1e-9
         self.eps = np.clip(eps_new, 1e-10, None) + 1e-12
+        # TURBULENT LENGTH-SCALE LIMIT (root-cause far-field railing fix; see Config).
+        # Bound L = Cmu^0.75 k^1.5/eps by L_max = min(buoyancy, geometric) via an eps
+        # floor, so nut = Cmu k^2/eps stays physical where strain AND stratification are
+        # both weak (exactly where the eddy viscosity otherwise rails).
+        if cfg.strat_length_limit:
+            N2 = -(cfg.g / cfg.rho0) * ddz(self.rho, dz, fl)      # buoyancy freq^2
+            Nstab = np.sqrt(np.maximum(N2, 0.0))
+            L_buoy = np.where(N2 > 1e-12,
+                              cfg.galperin_cb * np.sqrt(2.0 * self.k) / (Nstab + 1e-12),
+                              np.inf)
+            d_bed = np.maximum(g.Z + g.H[:, :, None], 0.5 * dz)   # height above bed
+            d_surf = np.maximum(-g.Z, 0.5 * dz)                   # depth below surface
+            L_geom = np.minimum(cfg.kappa_vk * np.minimum(d_bed, d_surf),
+                                cfg.mixlen_lambda * cfg.depth)
+            L_max = np.minimum(L_buoy, L_geom)
+            eps_floor = cfg.Cmu ** 0.75 * self.k ** 1.5 / np.maximum(L_max, 1e-6)
+            self.eps = np.maximum(self.eps, eps_floor)
         # eddy viscosity nut = Cmu k T. REALIZABLE limiter (Durbin 1996): bound the
         # turbulent time scale T by the strain rate so nut cannot over-produce/rail.
         if cfg.realizable_keps:
@@ -2776,6 +2862,14 @@ class NereidSolver:
         # float() the device reductions so this scalar dt arithmetic stays on the host
         # (a CuPy 0-d scalar must not reach the module-level np.clip below).
         uh = max(float(abs(self.u).max()), float(abs(self.v).max()), 1e-6)
+        # NOTE: g.U_d (nozzle exit velocity) is retained in the advective CFL even
+        # though the coupled far field never carries it. It is not a true advective
+        # limit here; it acts as a conservative timestep cap that keeps the EXPLICIT
+        # k-epsilon production/sink update (see _update_turbulence) stable. Removing
+        # it lets dt grow ~2.5x and the explicit turbulence source overshoots, railing
+        # nut against nut_max in stratified cells — the exact over-mixing this model
+        # exists to avoid. A proper fix is a semi-implicit k-eps sink; until then this
+        # cap stays.
         umax = max(uh, float(abs(self.w).max()), g.U_d, 1e-6)
         dt_adv = cfg.cfl * min(dx, dy, dz) / umax
         # anisotropic diffusion limit using the actual max diagonal diffusivities
@@ -3153,6 +3247,7 @@ def write_outputs(cfg, grid, member_states, log, outdir):
         tail = hist[-ntail:]
         steady = {"window_s": [float(tail[0]["t_s"]), float(tail[-1]["t_s"])],
                   "n_samples": len(tail), "converged": {}}
+        tsec = np.array([float(t["t_s"]) for t in tail])
         for key in ("S_max", "excess_max", "r_max_m", "z_deepest_m",
                     "seabed_footprint_m2", "dilution_min"):
             vals = np.array([t[key] for t in tail if np.isfinite(t.get(key, np.nan))])
@@ -3160,7 +3255,32 @@ def write_outputs(cfg, grid, member_states, log, outdir):
                 mu = float(vals.mean()); sd = float(vals.std())
                 steady[key + "_mean"] = mu
                 steady[key + "_std"] = sd
-                steady["converged"][key] = bool(abs(sd) <= cfg.steady_tol*abs(mu) + 1e-9)
+                # linear drift across the window (least squares); a metric that is
+                # still climbing is NOT steady however small its scatter happens to be.
+                drift = 0.0
+                if vals.size >= 2 and tsec.size == vals.size and tsec.ptp() > 0:
+                    slope = float(np.polyfit(tsec, vals, 1)[0])
+                    drift = slope * float(tsec[-1] - tsec[0])
+                steady[key + "_drift"] = float(drift)
+                steady[key + "_drift_rel"] = float(abs(drift) / max(abs(mu), 1e-12))
+                # ROBUST stationarity drift: difference between the mean of the second
+                # half of the window and the first half. For a stationary but OSCILLATING
+                # signal (a stochastically-forced quantity that fluctuates about a stable
+                # mean, e.g. a drag-limited gravity-current front), a least-squares slope
+                # is dominated by which phase of the oscillation the window endpoints
+                # happen to fall on and reports spurious "drift"; comparing half-window
+                # means averages the oscillation out and isolates a genuine slow trend.
+                # The convergence flag uses this robust estimator.
+                half = vals.size // 2
+                if half >= 1:
+                    drift_sh = float(vals[-half:].mean() - vals[:half].mean())
+                else:
+                    drift_sh = drift
+                steady[key + "_drift_splithalf"] = drift_sh
+                steady[key + "_drift_splithalf_rel"] = float(abs(drift_sh) / max(abs(mu), 1e-12))
+                ok_scatter = abs(sd) <= cfg.steady_tol * abs(mu) + 1e-9
+                ok_trend = abs(drift_sh) <= cfg.steady_trend_tol * abs(mu) + 1e-9
+                steady["converged"][key] = bool(ok_scatter and ok_trend)
         steady["steady_state_reached"] = bool(steady["converged"] and
                                               all(steady["converged"].values()))
         metrics["steady_state"] = steady
