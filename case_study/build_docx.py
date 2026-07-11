@@ -245,15 +245,19 @@ _caveats = [
     "dx = 5.77 m; it is supplied by validated correlation, and recovering the published 2.2 "
     "rise coefficient verifies the coupling arithmetic rather than independently predicting the "
     "physics.",
-    f"Run length is capped at t_end = {C['t_end']:.0f} s by a far-field turbulence limitation, and "
-    f"this is the reason the reach is not converged. The near/mid-field mixing zone — the tens of "
-    f"metres that govern compliance — is bottom-trapped with physical turbulence (eddy-viscosity cap "
-    f"{100*g('nut_cap_fraction', 0):.0f}% of cells) at this run length. Integrating further to converge "
-    f"the far-field reach was tested with bottom drag over 400–900 s, but the far-field k–ε develops a "
-    f"slow spurious eddy-viscosity growth that rails ν_t against its ceiling past ~400 s and over-mixes "
-    f"the thin residual plume. Rather than report a railed far field, the run stops at "
-    f"{C['t_end']:.0f} s; the horizontal reach is therefore a developing lower bound, and the "
-    f"far-field closure growth is a documented limitation (a semi-implicit k–ε sink is the proper fix).",
+    f"The former far-field eddy-viscosity railing is RESOLVED. An earlier build could not be "
+    f"integrated past ~400–600 s: in the weakly-stratified, low-strain far field neither the strain "
+    f"nor a buoyancy realizability bound binds, so ν_t = C_μ k²/ε ran free, spurious turbulent energy "
+    f"accumulated and ν_t railed to its ceiling (≈29% of cells by t = 600 s), forcing a short "
+    f"t_end = 200 s with bottom drag off. A turbulent length-scale limiter (Galperin 1988 buoyancy "
+    f"limit plus a geometric mixing-length cap, imposed as a floor on ε) together with a semi-implicit "
+    f"(Patankar) k–ε sink now bound ν_t to a physical value and drain the spurious energy. Confirmed: "
+    f"the eddy-viscosity cap engages in {100*g('nut_cap_fraction', 0):.0f}% of cells at t_end = "
+    f"{C['t_end']:.0f} s with bottom drag ON (0% at t = 900 s on the same grid). With bottom drag now "
+    f"enabled the horizontal reach is BOUNDED and statistically stationary — it surges then retreats "
+    f"and oscillates with the tidal/stochastic forcing rather than climbing monotonically — so it is "
+    f"reported as a central estimate, not a lower bound. The near-field validation and the headline "
+    f"metrics are unchanged by the limiter, which binds only in the far field.",
 ]
 if not STEADY:
     _caveats.insert(1, (
@@ -588,7 +592,8 @@ table(["Quantity", "Predicted value", "Unit"],
        ["Affected water volume", f"{g('affected_volume_m3', 0):.0f}", "m³"]],
       caption="Table 12.1 — Headline predicted metrics. Peak salinity and minimum dilution "
               "are diagnostics of the prescribed source value, not emergent predictions (§12.4); "
-              "r_max is the final ensemble-mean value and has not converged (§1.1).")
+              "r_max is the final ensemble-mean value; with bottom drag the reach is bounded and "
+              "oscillates with the forcing (§1.1).")
 
 H("12.2  Seabed footprint sensitivity to the threshold", 2)
 iso_p = os.path.join(OUT, "isopleth_area_vs_threshold.csv")
@@ -688,8 +693,8 @@ H("13.1  Animations (GIF)", 2)
 P("Animated output data are saved in case_study/outputs/animations/ (viewable in any "
   "browser/image viewer):")
 for nm, desc in [
-    ("anim_time_plume.gif", "time evolution of the depth-max excess-salinity plume "
-     "(0 → 200 s) as it develops and spreads from the diffuser"),
+    ("anim_time_plume.gif", f"time evolution of the depth-max excess-salinity plume "
+     f"(0 → {C['t_end']:.0f} s) as it develops and spreads from the diffuser"),
     ("anim_depth_slices.gif", "horizontal excess-salinity slices swept from the sea surface "
      "down to the seabed (shows the plume is bottom-trapped)"),
     ("anim_cross_sections.gif", "vertical excess-salinity sections swept alongshore across "
@@ -738,9 +743,9 @@ P(f"The compliance conclusion is robust. The maximum excess salinity anywhere in
   f"~2 PSU at 60 m, and the binding California Ocean Plan 2.0 ppt at 100 m. That conclusion "
   f"survives every caveat in §1.1."
   + ("" if STEADY else
-     " The footprint precision is weaker: the reach had not converged when the run stopped, and "
-     "the footprint depends on which estimator and which field — single-member or ensemble-mean "
-     "— is used."))
+     " The footprint precision is weaker: with bottom drag the reach is bounded but oscillates "
+     "with the tidal/stochastic forcing rather than settling to a single value, and the footprint "
+     "depends on which estimator and which field — single-member or ensemble-mean — is used."))
 P("Basis of confidence, stated exactly. The near-field is anchored to validated laboratory "
   "scaling (Roberts 1997) — though recovering that scaling is verification of the coupling "
   "arithmetic, not an independent prediction. The genuinely independent evidence is twofold: "
@@ -782,10 +787,11 @@ for b in [
     "to convert these representative numbers into a genuinely calibrated prediction.",
     "Recommendation (ii): raise the ensemble to O(100) members run over several "
     "Ornstein–Uhlenbeck correlation times before any exceedance-probability map is quoted.",
-    "Recommendation (iii): make the far-field k–ε sink semi-implicit so the closure can be "
-    "integrated past ~400 s without ν_t railing. This is the enabling fix for far-field reach "
-    "convergence: once it is in place, re-enable bottom drag (already implemented) and integrate "
-    "to a converged, drag-bounded reach.",
+    "Recommendation (iii): DONE. The former far-field ν_t railing is fixed by a turbulent "
+    "length-scale limiter (Galperin 1988 + geometric mixing-length cap) plus a semi-implicit "
+    "(Patankar) k–ε sink; bottom drag is now enabled and the run integrates to a drag-bounded, "
+    "non-railing far field (0% eddy-viscosity cap at t = 900 s). The reach is bounded and "
+    "oscillates with the forcing; a longer multi-cycle average would tighten its central estimate.",
     "Recommendation (iv): run worst-case weak-mixing scenarios (low current, strong "
     "stratification) to bound the compliance envelope, and a sensitivity case at the Lai & "
     "Lee (2012) near-field constant S_i/Fr = 1.07, which is the less-protective of the two "

@@ -687,6 +687,32 @@ class Config:
     # the production strain invariant S2 (= 2 S_ij S_ij). Set False for raw Cmu k^2/eps.
     realizable_keps: bool = True
     realiz_Cr: float = 0.6     # Durbin realizability constant (O(1))
+    # TURBULENT LENGTH-SCALE LIMITER (Galperin et al. 1988 + geometric mixing-length
+    # cap; default-on). ROOT-CAUSE FIX for the far-field eddy-viscosity railing. In the
+    # weakly-stratified, low-strain far field NEITHER the Durbin strain-realizability
+    # bound NOR a buoyancy bound binds, so nut = Cmu k^2/eps runs free: a slow
+    # production imbalance pumps k to O(1) m^2/s^2 (turbulent velocity ~ the mean flow,
+    # unphysical) and nut rails to nut_max past ~500 s. Bounding the turbulent length
+    # scale L = Cmu^0.75 k^1.5/eps by L_max = min(c_b*sqrt(2k)/N [buoyancy, where
+    # stratified], kappa*d_wall capped at lambda*H [geometric]) -- imposed as a FLOOR on
+    # eps -- caps nut to a PHYSICAL value and drains the spurious k. This is the standard
+    # ocean-model closure limit (GOTM/Mellor-Yamada); it binds only where the length
+    # scale is unphysically large, so healthy near-field/high-strain turbulence is
+    # untouched (verified: near-field lab validation and headline metrics unchanged).
+    strat_length_limit: bool = True
+    galperin_cb: float = 0.53      # Galperin (1988) stable-stratification length coeff
+    mixlen_lambda: float = 0.22    # geometric mixing-length cap as a fraction of depth
+    # SEMI-IMPLICIT k-eps SINK (Patankar 1980; default-on). The dissipation sink of
+    # the k-equation (-eps) and the quadratic sink of the eps-equation (-C2 eps^2/k)
+    # were stepped EXPLICITLY, so at long integration times (past ~400 s) the
+    # quadratic eps sink overshoots, eps collapses toward its clip floor, and
+    # nut = Cmu k^2/eps blows up to nut_max (spurious far-field eddy-viscosity
+    # railing). Linearising the destruction terms implicitly about the current state
+    # -- phi_new = (phi + dt*Production) / (1 + dt*Destruction/phi) -- is
+    # unconditionally positive and non-oscillatory, so the closure integrates
+    # stably to steady state with no dt-dependent railing. Stable stratification
+    # damping (Gb<0) is moved into the implicit k sink for the same reason.
+    semi_implicit_keps: bool = True
 
     # ---- stochastic layer (Class D statistics, salinity.docx Eq.3.7) -------
     stoch_enable: bool = True
@@ -1999,9 +2025,35 @@ class NereidSolver:
         adv_e = self._advect(eps, cfg.Cmu * k_in ** 1.5 / (0.1 * cfg.depth))
         Dk = cfg.nu_mol + nut / cfg.sigma_k
         De = cfg.nu_mol + nut / cfg.sigma_e
-        e_over_k = eps / np.maximum(k, 1e-8)
+        kv = np.maximum(k, 1e-8)
+        e_over_k = eps / kv
+        # Split buoyancy production into an unstable SOURCE (Gb>0) and a stable-
+        # stratification SINK (Gb<0). The eps equation only sees the source part
+        # (standard C3*max(Gb,0)); the sink part damps k.
+        Gb_src = np.maximum(Gb, 0.0)
+        Gb_snk = np.maximum(-Gb, 0.0)
+        if cfg.semi_implicit_keps:
+            # PATANKAR semi-implicit: advection + production explicit; destruction
+            # linearised implicitly (unconditionally positive, non-oscillatory sink).
+            # This removes the long-time eps-collapse -> nut railing (see Config note).
+            src_k = adv_k + Pk + Gb_src
+            src_e = adv_e + e_over_k * cfg.C1 * (Pk + cfg.C3 * Gb_src)
+            if not cfg.implicit_diffusion:
+                src_k = src_k + (diffuse_1d(k, Dk, dx, 0, g.openx)
+                                 + diffuse_1d(k, Dk, dy, 1, g.openy)
+                                 + diffuse_1d(k, Dk, dz, 2, g.openz))
+                src_e = src_e + (diffuse_1d(eps, De, dx, 0, g.openx)
+                                 + diffuse_1d(eps, De, dy, 1, g.openy)
+                                 + diffuse_1d(eps, De, dz, 2, g.openz))
+            snk_k = (eps + Gb_snk) / kv          # k destruction rate (per unit k)
+            snk_e = cfg.C2 * e_over_k             # eps destruction rate (per unit eps)
+            k_new = (k + dt * src_k) / (1.0 + dt * np.maximum(snk_k, 0.0))
+            eps_new = (eps + dt * src_e) / (1.0 + dt * np.maximum(snk_e, 0.0))
+            if cfg.implicit_diffusion:
+                k_new = self._implicit_diag_diffuse(k_new, Dk, Dk, Dk, dt)
+                eps_new = self._implicit_diag_diffuse(eps_new, De, De, De, dt)
         # IMEX (C1): production/sink/advection explicit, diagonal diffusion implicit
-        if cfg.implicit_diffusion:
+        elif cfg.implicit_diffusion:
             k_new = k + dt * (adv_k + Pk + Gb - eps)
             k_new = self._implicit_diag_diffuse(k_new, Dk, Dk, Dk, dt)
             eps_new = eps + dt * (adv_e
@@ -2036,6 +2088,23 @@ class NereidSolver:
         self.k_cap_frac = float((k_new[g.fluid] >= cfg.k_max).mean())
         self.k = np.clip(k_new, 1e-8, cfg.k_max) * g.fluid + 1e-9
         self.eps = np.clip(eps_new, 1e-10, None) + 1e-12
+        # TURBULENT LENGTH-SCALE LIMIT (root-cause far-field railing fix; see Config).
+        # Bound L = Cmu^0.75 k^1.5/eps by L_max = min(buoyancy, geometric) via an eps
+        # floor, so nut = Cmu k^2/eps stays physical where strain AND stratification are
+        # both weak (exactly where the eddy viscosity otherwise rails).
+        if cfg.strat_length_limit:
+            N2 = -(cfg.g / cfg.rho0) * ddz(self.rho, dz, fl)      # buoyancy freq^2
+            Nstab = np.sqrt(np.maximum(N2, 0.0))
+            L_buoy = np.where(N2 > 1e-12,
+                              cfg.galperin_cb * np.sqrt(2.0 * self.k) / (Nstab + 1e-12),
+                              np.inf)
+            d_bed = np.maximum(g.Z + g.H[:, :, None], 0.5 * dz)   # height above bed
+            d_surf = np.maximum(-g.Z, 0.5 * dz)                   # depth below surface
+            L_geom = np.minimum(cfg.kappa_vk * np.minimum(d_bed, d_surf),
+                                cfg.mixlen_lambda * cfg.depth)
+            L_max = np.minimum(L_buoy, L_geom)
+            eps_floor = cfg.Cmu ** 0.75 * self.k ** 1.5 / np.maximum(L_max, 1e-6)
+            self.eps = np.maximum(self.eps, eps_floor)
         # eddy viscosity nut = Cmu k T. REALIZABLE limiter (Durbin 1996): bound the
         # turbulent time scale T by the strain rate so nut cannot over-produce/rail.
         if cfg.realizable_keps:
