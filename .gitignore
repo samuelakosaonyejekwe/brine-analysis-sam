@@ -15,3 +15,6 @@ nereid_output/
 
 # User's separate dissertation project — scratch, never tracked
 ignore/
+
+# Transient push transcript (was never tracked)
+validation/push.log
