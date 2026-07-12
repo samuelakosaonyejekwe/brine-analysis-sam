@@ -152,9 +152,12 @@ P("Modelling tool: NEREID-B (solver.py) — a universal 3-D finite-volume couple
   "brine-dispersion solver with near-field inclined-dense-jet correlation coupling, "
   "buoyancy-modified realizable k–ε turbulence, a full anisotropic dispersion tensor, "
   "partial-cell bathymetry and a Monte-Carlo stochastic ensemble. "
-  "Status: VALIDATED against laboratory, field and analytical benchmarks. The far field "
-  "is UNCALIBRATED — the dispersivity multiplier returned 1.00 against a representative "
-  "(constructed, not measured) site transect, so no fitting was performed. Read §1.1 "
+  "Status: VALIDATED at the numerics/PDE level (lock-exchange front Froude number; 13/13 "
+  "invariant self-tests). BENCHMARKED — not validated — against measured in-class field data "
+  "(Gold Coast diffuser, Baum 2019), where case-by-case dilution errors span 0.35× to 3.4×. "
+  "The far field is UNCALIBRATED: the dispersivity multiplier is unidentifiable from "
+  "mixing-zone data (a four-fold sweep moves the observable by <3.5%) and remains at its "
+  "physical default of 1.0 — a default, not a fit. Screening-grade. Read §1.1 and §10 "
   "before quoting any number.", italic=True, size=10, color=TEAL)
 P("Author: Akosa Samuel Onyejekwe — independent research work.",
   bold=True, size=11, color=NAVY)
@@ -167,11 +170,13 @@ P(f"NEREID-B was applied to predict the fate of the hypersaline reject (brine) "
   f"The model resolves the near-field inclined-dense-jet behaviour via validated "
   f"correlations and the 3-D far-field gravity-current spreading and dilution of the "
   f"negatively-buoyant plume over the shelf seabed, under the site's ambient current, "
-  f"stratification and energetic open-ocean wave climate. The far field was compared "
-  f"against a representative site dilution transect (no fitting was required, and none "
-  f"was performed) and the whole model chain was VALIDATED against the Roberts (1997) "
-  f"dense-jet laboratory scaling, the published Perth multi-point field transect and a "
-  f"lock-exchange PDE benchmark.")
+  f"stratification and energetic open-ocean wave climate. The far field is UNCALIBRATED — "
+  f"the dispersivity multiplier cannot be identified from mixing-zone data (§10) and no "
+  f"CTD/ADCP survey exists at Kurnell. The model chain is VALIDATED at the numerics/PDE "
+  f"level (lock-exchange front Froude number; 13/13 invariant self-tests), reproduces the "
+  f"Roberts (1997) dense-jet laboratory scaling, and is BENCHMARKED against the measured "
+  f"in-class Gold Coast field dataset (Baum 2019), where its case-by-case dilution error "
+  f"spans 0.35× to 3.4× (§10). It is a screening-grade tool.")
 P("Headline predictions (steady, quasi-equilibrium plume):", bold=True)
 bullet(f"Source: discharge salinity {C['S0']:.1f} g/kg into {C['S_amb_surf']:.1f} g/kg "
        f"ambient (excess at source {excess_src:.1f} g/kg, "
@@ -195,11 +200,13 @@ bullet(f"Reported peak salinity {g('S_max', 0):.2f} g/kg is NOT an emergent pred
        f"the near-field model. The minimum dilution of {g('dilution_min', 0):.0f}:1 sits slightly "
        f"below the near-field hand-off of {g('nf_return_dilution', 0):.0f}:1 for the same reason "
        f"(§12.4). Both are diagnostics of the source condition.")
-if CAL:
-    bullet(f"Calibration: the far-field dispersivity multiplier farfield_disp_cal returned "
-           f"{CAL.get('farfield_disp_cal', C.get('farfield_disp_cal', 1.0)):.2f} — i.e. unity, no "
-           f"adjustment. The target transect is representative, not measured, so this is a "
-           f"consistency check rather than a calibration (§10).")
+bullet(f"Calibration: the NEAR-FIELD return-dilution coefficient is FITTED to MEASURED field data "
+       f"— nf_dilution_cal = {C.get('nf_dilution_cal', 1.0):.3f}, giving a field coefficient "
+       f"S_r = {1.6*C.get('nf_dilution_cal', 1.0):.2f}·Fr against the quiescent-laboratory 1.6·Fr of "
+       f"Roberts et al. (1997). Target: the 48.4:1 dilution measured 60 m from the in-class Gold "
+       f"Coast multiport diffuser at full plant capacity (Baum 2019). The FAR-FIELD dispersivity is "
+       f"UNIDENTIFIABLE from mixing-zone data and is left at its default of 1.0 — a default, not a "
+       f"fit (§10).")
 P(f"Mixing-zone assessment: against a conservative sub-lethal assessment contour of "
   f"ΔS = {C['dS_crit']} g/kg (more protective than the ~1 ppt typical of NSW mixing-zone "
   f"practice), the model predicts a seabed excess-salinity footprint of "
@@ -232,9 +239,14 @@ _caveats = [
     f"correlation time τ = {C.get('stoch_tau', 600):.0f} s is comparable with the run length, so "
     f"the forcing barely decorrelates. The spread is reported in §12.3 for completeness and must "
     f"not be used as an uncertainty bound.",
-    "The far field is not calibrated. The dispersivity multiplier returned unity against a "
-    "transect constructed to be reproducible without tuning (§10). The independent far-field "
-    "evidence is the Perth transect (~16–25% conservative) and the lock-exchange PDE benchmark.",
+    "The far field is NOT calibrated, and cannot be from available data. The dispersivity "
+    "multiplier is unidentifiable: a four-fold sweep moves the modelled mixing-zone dilution by "
+    "<3.5%, because that station is near-field-dominated (§10). It sits at its physical default "
+    "of 1.0 — a default, not a fit. Against the MEASURED in-class Gold Coast dataset the model "
+    "is NOT systematically conservative: it over-predicts dilution (under-states residual "
+    "salinity) in two of four cases, by up to 3.4×. The earlier claim of a uniform ~16–25% "
+    "conservative bias rested on the Perth 45:1 DESIGN target, not a measurement, and is "
+    "withdrawn.",
     "Physics claimed in §2 that remained INACTIVE in this run: osmotic salt flux, osmotic body "
     "force, Soret/Dufour cross-diffusion, the higher-order (TEOS-10-style) equation-of-state "
     "terms, and the genuine free surface. The run used near-field coupling, full-tensor "
@@ -526,33 +538,82 @@ P(f"How the steady-state flag is defined. A metric counts as steady only if BOTH
   italic=True, color=TEAL)
 
 # ============================================================ 10 CALIBRATION
-H("10.  Comparison against the representative site transect")
-tr_hdr, tr_rows = read_csv(os.path.join(INP, "site_ctd_dilution_transect.csv"))
+H("10.  Calibration against measured in-class field data")
 P("The far-field spreading rate is governed by a single knob, farfield_disp_cal, which "
-  "scales the tunable horizontal dispersivity. It was exercised against a centreline "
-  "dilution transect at the mixing-zone boundary (50 m). The near-field correlations and "
-  "the molecular and turbulent diffusivities are left physical (unfitted).")
-table(["Distance (m)", "Target dilution (representative)", "Target ΔS (g/kg)"],
-      [[r[0], r[1], r[2]] for r in tr_rows],
-      caption="Table 10.1 — Representative centreline dilution transect "
-              "(inputs/site_ctd_dilution_transect.csv). These values are constructed, "
-              "not measured — see the provenance note below.")
-if CAL:
-    P(f"Result: farfield_disp_cal = {CAL.get('farfield_disp_cal', 1.0):.2f}. The multiplier "
-      f"returned unity, i.e. no adjustment was made and the model reproduced the "
-      f"{tr_rows[-1][1]}:1 target at {tr_rows[-1][0]} m without tuning. Full log: "
-      f"validation/ctd_calibration.log; machine-readable result: "
-      f"nereid_output/calibration.json.", color=TEAL)
-P("Provenance — this is a consistency check, not a calibration. The transect is generated "
-  "by case_study/make_site_data.py, whose source comment records that the stations were "
-  "chosen to be “reproducible by the model at no tuning”. A procedure that recovers "
-  "unity against a target constructed to be recoverable has demonstrated consistency, not "
-  "predictive skill. The model has NOT been calibrated to measured data, and the word "
-  "“calibrated” is therefore avoided throughout this report. The independent far-field "
-  "evidence is the Perth transect in §11, against which the model was not fitted and is "
-  "shown conservative. To convert this into a genuine calibration, either commission a "
-  "site CTD/ADCP survey or adopt the measured Gold Coast Tugun transect (Baum et al. 2019) "
-  "as the target.", italic=True, color=TEAL)
+  "scales the tunable horizontal dispersivity. The near-field correlations and the "
+  "molecular and turbulent diffusivities are left physical (unfitted). This section reports "
+  "an attempt to fit that knob against REAL measured field data, and the negative result "
+  "that attempt returned.")
+P("Calibration target — the Gold Coast Desalination Plant (GCDP) offshore multiport brine "
+  "diffuser at Tugun, Queensland: a 203 m diffuser with 14 ports at 13.9 m spacing, internal "
+  "port diameter 0.238 m, inclined at 60° above the horizontal, discharging 2.5 m above the "
+  "seabed in a mean depth of 17.7 m on an open coast. This is the same discharge class as the "
+  "Kurnell outfall modelled here (deep, 60° inclined, multiport), and it is — to the author's "
+  "knowledge — the only in-class Australian diffuser with a published, multi-case, MEASURED "
+  "near-bed dilution dataset. Source: Baum (2019), PhD thesis, Univ. of Queensland, Tables 2.2 "
+  "and 2.3; peer-reviewed as Baum, Gibbes, Grinham, Albert, Fisher & Gale (2018), J. Hydraul. "
+  "Eng. 144(11). Dilution is reported at the 60 m boundary of the GCDP regulatory mixing zone.")
+table(["GCDP case", "Plant capacity", "Fr", "Measured dilution @ 60 m", "NEREID-B @ 60 m", "Model ÷ measured"],
+      [["2-2", "33%",  "10.7", "67.7:1", "24.0:1", "0.35  (model 64% under)"],
+       ["3-1", "100%", "23.4", "48.4:1", "58.2:1", "1.20  (model 20% over)"],
+       ["4-1", "66%",  "24.1", "22.4:1", "75.8:1", "3.38  (model 238% over)"],
+       ["4-2", "66%",  "16.6", "66.6:1", "35.6:1", "0.53  (model 47% under)"]],
+      caption="Table 10.1 — NEREID-B against the MEASURED Gold Coast field dataset "
+              "(Baum 2019, Tables 2.2–2.3), at farfield_disp_cal = 1.0. Inputs: "
+              "inputs/gcdp_baum_case*_transect.csv. Logs: validation/.")
+P("Result 1 — the FAR-FIELD knob is UNIDENTIFIABLE, so it was not fitted. Sweeping "
+  "farfield_disp_cal over 0.5 → 2.0 (a four-fold change) moves the modelled 60 m dilution by "
+  "less than 3.5% in every case (e.g. Case 3-1: 57.7 → 59.3), and no value of it reaches the "
+  "measured targets. The reason is physical: the 60 m station lies INSIDE the near-field "
+  "mixing zone — Roberts et al. (1997) give its length as X_n = 9.0·Fr·d ≈ 50 m for this "
+  "discharge — so the dilution there is set by near-field jet entrainment, not by far-field "
+  "dispersion. farfield_disp_cal therefore remains at its physically-derived default of 1.0: "
+  "a default, not a fit. The far field of this model is NOT calibrated, and a site CTD/ADCP "
+  "survey at Kurnell remains the only route to calibrating it.", color=TEAL)
+P("Result 2 — the NEAR-FIELD dilution coefficient IS identifiable, and has been CALIBRATED "
+  "against the measured data. Because the mixing-zone station is near-field-dominated, the "
+  "parameter the measurement constrains is the near-field return-dilution coefficient — "
+  "Roberts' S_r = 1.6·Fr, a QUIESCENT-LABORATORY value. NEREID-B now exposes it as "
+  "nf_dilution_cal (solver.py, --calibrate-nf). Unlike the far-field knob it has real "
+  "leverage: over nf_dilution_cal = 0.40 → 1.30 the modelled 60 m dilution spans 18.5:1 → "
+  "83.4:1, so the measured 48.4:1 is properly bracketed. Fitting it to the measured GCDP "
+  "Case 3-1 dilution gives:", color=TEAL)
+table(["Quantity", "Value", "Basis"],
+      [["nf_dilution_cal (fitted)", "0.871", "fit to MEASURED 48.4:1 @ 60 m, GCDP Case 3-1"],
+       ["Field return-dilution coefficient", "S_r = 1.39·Fr", "this calibration"],
+       ["Laboratory coefficient", "S_r = 1.60·Fr", "Roberts et al. (1997), quiescent tank"],
+       ["Far-field dispersivity", "1.00 (unfitted default)", "unidentifiable — see Result 1"]],
+      caption="Table 10.2 — Calibration result. Log: validation/nf_calibration.log; "
+              "machine-readable: nereid_output/nf_calibration.json.")
+P("The fitted field coefficient is 13% BELOW the laboratory value, i.e. a real diffuser "
+  "entrains less than a quiescent laboratory jet of the same Froude number. That is the "
+  "expected direction and the central finding of Baum (2019): crossflow, waves and velocity "
+  "shear in a real coastal setting degrade near-field entrainment relative to the still tank "
+  "from which the 1.6 coefficient was derived. The calibration is therefore physically "
+  "interpretable, not a numerical fudge. NOTE that it lowers dilution, so it RAISES the "
+  "predicted excess salinity and footprint: calibrating against reality made this "
+  "assessment more conservative, not less.", color=TEAL)
+P("Which case was fitted, and why only one. Case 3-1 is the highest-quality measurement in "
+  "the set: 100% plant capacity (the largest brine signal) and an ambient-salinity drift of "
+  "only −0.10 g/kg over the experiment. The other three cases are ambient-noise-limited — at "
+  "60 m the brine signal is ≤ 0.53 g/kg while the AMBIENT background itself wanders by "
+  "±2 g/kg, and the source authors explicitly caution against reading dilutions from the "
+  "low-capacity cases. Fitting to the noisy cases would fit the noise: across all four, the "
+  "model-to-measurement ratio spans 0.35 to 3.38 with no consistent sign, and the Roberts "
+  "laboratory scaling misses the same cases in the same directions (predicting 27.8:1 where "
+  "67.7:1 was measured, and 62.7:1 where 22.4:1 was measured). The remaining three cases are "
+  "therefore reported in Table 10.1 as an honest VALIDATION SPREAD, not used as fit targets. "
+  "A single-station calibration on the cleanest case, with the spread stated, is the most "
+  "this dataset can honestly support.", italic=True, color=TEAL)
+P("Provenance — an earlier revision of this study calibrated against a “site CTD/ADCP "
+  "dilution transect” generated by case_study/make_site_data.py, whose source comment "
+  "recorded that its stations were chosen to be “reproducible by the model at no tuning”. "
+  "Fitting to that target was circular and guaranteed the unity result it produced; the "
+  "reported “farfield_disp_cal returned 1.00, so no adjustment was needed” was in fact the "
+  "calibration routine FAILING to find leverage and falling back to its default. That "
+  "synthetic transect has been deleted from the repository and is replaced by the measured "
+  "GCDP data above. No CTD/ADCP survey exists at the Kurnell outfall; a site survey remains "
+  "the only route to a genuine site calibration.", italic=True, color=TEAL)
 
 # ============================================================ 11 VALIDATION
 H("11.  Validation and data sources")
@@ -562,9 +623,10 @@ table(["Level", "Benchmark / data (source)", "Accepted value", "NEREID-B result"
       [["Near-field jet (lab)", "60° inclined dense-jet scaling — Roberts et al. (1997); "
         "Lai & Lee (2012); Papakonstantis et al. (2011)",
         "z_t/(D·Fr) ≈ 2.0–2.2; S_r ≈ 1.6·Fr", "z_t/(D·Fr)=2.20; S_r≈1.6·Fr — PASS (4/4)"],
-       ["Far-field (field)", "Gold Coast Tugun measured diffuser dilution — Baum et al. (2019); "
-        "Perth design transect — Roberts et al. (2019)",
-        "~45–63:1 @ 50–60 m (in-class)", "Conservative (under-predicts dilution) — protective"],
+       ["Far-field (field)", "Gold Coast Tugun MEASURED diffuser dilution, 4 cases — "
+        "Baum (2019) thesis Tables 2.2–2.3 / Baum et al. (2018)",
+        "22.4–67.7:1 @ 60 m (measured spread)", "24.0–75.8:1 — within the measured spread; "
+        "NOT systematically conservative (optimistic in 2 of 4 cases, by up to 3.4×) — see §10"],
        ["Far-field (site)", "SDP Kurnell measured impact extent — Clark et al. (2018)",
         "detectable effects to ~100 m", "footprint within ≈ %d–%d m — consistent in scale"
         % (round(min(g('r_max_m', 0), ss.get('r_max_m_mean', 0))),
@@ -577,10 +639,15 @@ table(["Level", "Benchmark / data (source)", "Accepted value", "NEREID-B result"
               "Logs in validation/.")
 P("The near-field uses the validated laboratory scaling directly — note that recovering "
   "z_t/(D·Fr) = 2.20 from a hard-coded 2.2 coefficient verifies the coupling arithmetic "
-  "rather than independently predicting the physics. The far field is compared with the "
-  "representative site transect (§10, no fitting) and shown conservative against the in-class "
-  "Perth field data, which the model was never fitted to. The two genuinely independent "
-  "gates are therefore the Perth comparison and the lock-exchange PDE benchmark. "
+  "rather than independently predicting the physics. The far field is compared against the "
+  "MEASURED in-class Gold Coast dataset in §10, which the model was never fitted to. That "
+  "comparison does NOT show the model to be conservative: it is optimistic (over-predicts "
+  "dilution, and therefore under-states the residual salinity) in two of the four measured "
+  "cases, by up to a factor of 3.4, and conservative in the other two. Earlier revisions of "
+  "this report claimed a uniform ~16–25% conservative bias; that claim rested on the Perth "
+  "45:1 @ 50 m figure, which is a DESIGN/COMPLIANCE target rather than a measurement, and it "
+  "is withdrawn. The genuinely independent gates are therefore the measured Gold Coast "
+  "comparison and the lock-exchange PDE benchmark. "
   "Independently, the actual SDP Kurnell outfall study (Clark et al. 2018) found detectable "
   "ecological effects to ~100 m; this is an ecological effect distance driven partly by "
   "diffuser-induced near-bed flow, not a salinity isopleth, so it is an order-of-magnitude "
@@ -761,10 +828,13 @@ P("Basis of confidence, stated exactly. The near-field is anchored to validated 
   "scaling (Roberts 1997) — though recovering that scaling is verification of the coupling "
   "arithmetic, not an independent prediction. The genuinely independent evidence is twofold: "
   "the lock-exchange front Froude number of 0.51 against Benjamin's 0.50, which exercises the "
-  "PDE core with the brine physics switched off; and the Perth transect, against which the "
-  "model was never fitted and under-predicts dilution by ~16–25%, i.e. errs toward over-stating "
-  "impact. The far field is NOT calibrated to measured data (§10). These figures are "
-  "defensible for screening-level assessment and for nothing more.")
+  "PDE core with the brine physics switched off; and the MEASURED in-class Gold Coast dataset "
+  "(§10), against which the model was never fitted. That second gate is a benchmark, not a "
+  "pass: the model reproduces the measured spread but errs by 0.35× to 3.4× case-by-case, and "
+  "it is NOT systematically conservative — in two of the four measured cases it over-predicts "
+  "dilution and therefore under-states the residual salinity. The far field is NOT calibrated "
+  "to measured data and cannot be from what is available (§10). These figures are defensible "
+  "for screening-level assessment and for nothing more.")
 
 # ============================================================ 16 CONCLUSIONS
 H("16.  Conclusions and recommendations")
@@ -779,13 +849,26 @@ for b in [
     f"height above the source ({g('plume_rise_m', 0):.1f} m) agrees with the independently-derived "
     f"near-field terminal rise ({g('nf_rise_m', 0):.1f} m), which is a genuine cross-check "
     f"between two separately-constructed parts of the model.",
-    "The solver is validated against laboratory, field and analytical benchmarks and its "
-    "numerics are sound: 13/13 self-tests, machine-precision continuity, conserved mass and "
-    "no eddy-viscosity railing. Numerical soundness is not physical correctness — a "
-    "perfectly-converged solution of the wrong problem carries identical diagnostics.",
-    "The far field is NOT calibrated. The dispersivity multiplier returned 1.00 against a "
-    "transect that was constructed to be reproducible without tuning, so the procedure "
-    "demonstrated consistency rather than predictive skill.",
+    "The solver's numerics are sound: 13/13 self-tests, machine-precision continuity, conserved "
+    "mass and no eddy-viscosity railing, with the lock-exchange front Froude number reproduced to "
+    "~2%. Numerical soundness is not physical correctness — a perfectly-converged solution of the "
+    "wrong problem carries identical diagnostics.",
+    "The NEAR FIELD is CALIBRATED to measured in-class field data: nf_dilution_cal = 0.871, fitted "
+    "to the 48.4:1 dilution measured 60 m from the Gold Coast diffuser at full plant capacity "
+    "(Baum 2019). The fitted field return-dilution coefficient, S_r = 1.39·Fr, is 13% below the "
+    "quiescent-laboratory 1.6·Fr of Roberts et al. (1997) — a real diffuser in crossflow, waves and "
+    "shear entrains less than a still tank. This LOWERS dilution and therefore RAISES the predicted "
+    "footprint: calibrating against measured reality made this assessment more conservative.",
+    "The FAR FIELD is NOT calibrated and cannot be from the available data. farfield_disp_cal is "
+    "unidentifiable — a four-fold sweep moves the modelled mixing-zone dilution by <3.5%, because "
+    "that station is near-field-dominated — so it remains at its physical default of 1.0: a default, "
+    "not a fit. A prior revision reported that same 1.00 as a successful calibration against a "
+    "transect constructed to be reproducible without tuning; that was circular, the transect has been "
+    "deleted, and the claim is withdrawn.",
+    "The model is NOT demonstrably conservative. Against the four MEASURED Gold Coast cases its "
+    "dilution error spans 0.35×–3.4×, over-predicting dilution (and so under-stating residual "
+    "salinity) in two of them. The earlier claim of a uniform ~16–25% conservative bias rested on "
+    "Perth's 45:1 @ 50 m DESIGN target rather than a measurement, and is withdrawn.",
     f"Peak salinity ({g('S_max', 0):.2f} g/kg) and, to a lesser degree, minimum dilution "
     f"({g('dilution_min', 0):.1f}:1) are diagnostics of the prescribed source condition rather "
     f"than predictions, and no change of source-blob geometry can alter that (§12.4).",
@@ -794,9 +877,12 @@ for b in [
     f"are still adjusting across this run's trailing window. A longer (1800 s) run confirms the "
     f"footprint mean is stable (~2500 m²) while r_max keeps creeping (a thin near-threshold tail), so "
     f"r_max is quoted as a bound and compliance rests on the footprint and concentration limits."]) + [
-    "Recommendation (i): commission a real CTD/ADCP survey at the outfall and re-run "
-    "--calibrate-ctd — or adopt the measured Gold Coast Tugun transect (Baum et al. 2019) — "
-    "to convert these representative numbers into a genuinely calibrated prediction.",
+    "Recommendation (i): commission a real CTD/ADCP survey at the Kurnell outfall. The near field "
+    "is now calibrated to measured in-class data (Gold Coast), which is the best available "
+    "substitute, but it is ANOTHER SITE — its crossflow, wave climate and diffuser geometry are not "
+    "Kurnell's. Only a site survey can calibrate the far field, and it must include stations far "
+    "enough beyond the mixing zone for far-field spreading to dominate, or the dispersivity will "
+    "remain unidentifiable no matter how good the data.",
     "Recommendation (ii): raise the ensemble to O(100) members run over several "
     "Ornstein–Uhlenbeck correlation times before any exceedance-probability map is quoted.",
     "Recommendation (iii): DONE. The former far-field ν_t railing is fixed by a turbulent "
@@ -825,9 +911,27 @@ refs = [
     "buoyant jets 1 & 2. Journal of Hydraulic Research 49(1): 3–12, 13–22.",
     "Roberts, P.J.W., Taplin, J. & Zigas, E. (2019). Design of Seawater Desalination Brine "
     "Diffusers. 38th IAHR World Congress. doi:10.3850/38WC092019-1053.",
-    "Baum, M.J. et al. (2019). Spatiotemporal influences of open-coastal forcing dynamics on a "
-    "dense multiport diffuser outfall (Gold Coast). J. Hydraulic Eng. 145(10): 04019034. "
-    "doi:10.1061/(ASCE)HY.1943-7900.0001622.",
+    "CALIBRATION SOURCE (near field) — Baum, M.J. (2019). Dense Jet Behaviour in Dynamic Receiving "
+    "Environments. PhD thesis, School of Civil Engineering, University of Queensland, Brisbane. "
+    "Chapter 2, Tables 2.2–2.3: measured discharge/ambient properties and measured plume dilution "
+    "for the Gold Coast Desalination Plant offshore multiport diffuser (203 m diffuser, 14 ports at "
+    "13.9 m spacing, internal port diameter 0.238 m, inclined 60°, discharge elevation 2.5 m above "
+    "the seabed, mean site depth 17.7 m). The measured boundary dilution at the 60 m mixing-zone "
+    "limit, Case 3-1 (100% plant capacity, Fr = 23.4), is 48.4:1 — the target to which "
+    "nf_dilution_cal = 0.871 is fitted. Read directly from the thesis; the case configuration "
+    "independently reproduces the published Fr = 23.4 to within 2%.",
+    "CALIBRATION SOURCE (peer-reviewed version of the above) — Baum, M.J., Gibbes, B., Grinham, A., "
+    "Albert, S., Fisher, P. & Gale, D. (2018). Near-Field Observations of an Offshore Multiport Brine "
+    "Diffuser under Various Operating Conditions. Journal of Hydraulic Engineering 144(11). "
+    "doi:10.1061/(ASCE)HY.1943-7900.0001524.",
+    "Baum, M.J., Albert, S., Grinham, A. & Gibbes, B. (2019). Spatiotemporal Influences of "
+    "Open-Coastal Forcing Dynamics on a Dense Multiport Diffuser Outfall. Journal of Hydraulic "
+    "Engineering 145(10). doi:10.1061/(ASCE)HY.1943-7900.0001622. (Article number not quoted: it "
+    "could not be verified against the publisher's record.)",
+    "Baum, M.J., Gibbes, B., Grinham, A., Albert, S., Gale, D. & Fisher, P. (2017). Performance "
+    "Assessment of the Gold Coast Desalination Plant Offshore Multiport Brine Diffuser during "
+    "'Hot Standby' Operation. Int. J. Civil & Environmental Engineering 11(6): 711–717. "
+    "(Independent corroboration of the diffuser configuration used above.)",
     "Clark, G.F. et al. (2018). First large-scale ecological impact study of a desalination "
     "outfall (Sydney/Kurnell). Water Research 145: 757–768. doi:10.1016/j.watres.2018.08.071.",
     "Benjamin, T.B. (1968). Gravity currents and related phenomena. J. Fluid Mech. 31(2): 209–248. "

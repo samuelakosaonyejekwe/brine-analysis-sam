@@ -1,9 +1,8 @@
 {
-  "_case": "Sydney Desalination Plant (Kurnell, NSW) — offshore Tasman-shelf submerged multiport brine diffuser. VALIDATED (Roberts 1997 lab scaling, Perth field transect, lock-exchange PDE benchmark). NOT CALIBRATED: the far-field dispersivity multiplier returned 1.00 against a representative, constructed transect (see make_site_data.py), so no fitting was performed. Grid/ensemble/t_end below are the values that produced case_study/outputs/.",
+  "_case": "Sydney Desalination Plant (Kurnell, NSW) \u2014 offshore Tasman-shelf submerged multiport brine diffuser. CALIBRATION: the near-field return-dilution coefficient is FITTED to MEASURED in-class field data (nf_dilution_cal=0.871 -> field S_r=1.39*Fr, against the quiescent-laboratory 1.6*Fr of Roberts et al. 1997), from the Gold Coast Desalination Plant offshore multiport diffuser, Case 3-1 (100% capacity, measured 48.4:1 at the 60 m mixing-zone boundary) \u2014 Baum (2019) PhD thesis, Univ. of Queensland, Tables 2.2-2.3; peer-reviewed as Baum, Gibbes, Grinham, Albert, Fisher & Gale (2018), J. Hydraul. Eng. 144(11), doi:10.1061/(ASCE)HY.1943-7900.0001524. The FAR FIELD is NOT calibrated: farfield_disp_cal is unidentifiable from mixing-zone data (a 4x sweep moves the modelled dilution <3.5%; that station is near-field-dominated) and stays at its physical default of 1.0. NOT demonstrably conservative: across the four measured Gold Coast cases the model's dilution error spans 0.35x-3.4x. VALIDATED at the numerics/PDE level (lock-exchange front Froude number; 13/13 invariants). A prior revision calibrated against a synthetic transect constructed to be reproducible without tuning \u2014 that was circular and has been deleted. Grid/ensemble/t_end below are the values that produced case_study/outputs/.",
   "_runlength_note": "t_end=600 s with bottom_drag ON. The former far-field eddy-viscosity railing (nut->nut_max past ~400-600 s, which previously forced t_end=200 s and bottom_drag OFF) is RESOLVED by the turbulent length-scale limiter (strat_length_limit; Galperin 1988 buoyancy limit + geometric mixing-length cap) plus the semi-implicit k-eps sink. Confirmed on this grid: nut_cap_fraction=0% at t=900 s with bottom_drag ON (was ~29% at t=600 s before the fix). With bottom drag the horizontal reach is now BOUNDED and statistically stationary (oscillates ~40-54 m with tidal/stochastic breathing) instead of the pre-fix monotonic climb 70->96 m; it is reported as a central estimate, not a lower bound. The seabed footprint that governs compliance is near-converged (steady-window drift ~6%).",
   "_provenance_public": "Public design basis: SDP Kurnell, product capacity 250 ML/day (expandable to 500 ML/day), SWRO recovery ~47%, brine returned through an offshore diffuser on the open Tasman Sea shelf in ~25 m water via tunnelled risers with inclined multiport rosette heads. Ambient open-ocean salinity ~35.4-35.6 psu; summer thermocline ~18-21 C. NSW mixing-zone practice limits the salinity anomaly to ~1 ppt above ambient at the mixing-zone boundary.",
   "_assumptions_engineering": "Per-port nozzle geometry and the concentrate split are a REPRESENTATIVE deep-diffuser configuration consistent with the public capacity/recovery and a 60-deg inclined-dense-jet design, NOT measured per-port data. Mass balance: feed = 250/0.47 = 532 ML/day, concentrate = 282 ML/day = 3.26 m3/s; concentrate salinity = 35.5/(1-0.47) ~= 67 psu. Per-port Q_d = 3.26/72 = 0.0453 m3/s, U_d ~= 4.0 m/s at d_p = 0.12 m. Site-specific bathymetry/CTD/ADCP/wave/wind decks in case_study/inputs/ (credible representative survey).",
-
   "S0": 67.0,
   "T_b": 22.0,
   "Q_d": 0.0453,
@@ -13,12 +12,10 @@
   "n_ports": 72,
   "port_spacing": 5.0,
   "nozzle_height": 1.0,
-
   "S_amb_surf": 35.4,
   "S_amb_bot": 35.6,
   "T_amb_surf": 21.0,
   "T_amb_bot": 18.0,
-
   "U_current": 0.12,
   "tide_amp": 0.04,
   "tide_period": 44712.0,
@@ -27,7 +24,6 @@
   "latitude_deg": -34.0,
   "wind10": 7.0,
   "wind_dir_deg": 0.0,
-
   "depth": 25.0,
   "bathy_min_depth": 24.0,
   "bathy_slope": 0.006,
@@ -38,31 +34,33 @@
   "nz": 26,
   "x_src_frac": 0.15,
   "y_src_frac": 0.5,
-
   "near_field_coupling": true,
   "free_surface": false,
   "full_tensor_dispersion": true,
   "realizable_keps": true,
   "buoyancy_damping_fix": true,
   "farfield_disp_cal": 1.0,
-
   "bottom_drag": true,
   "wall_function": true,
   "Cd_bed": 0.0025,
-
   "dS_crit": 0.5,
-  "footprint_thresholds": [0.1, 0.25, 0.5, 0.75, 1.0],
-
+  "footprint_thresholds": [
+    0.1,
+    0.25,
+    0.5,
+    0.75,
+    1.0
+  ],
   "stoch_enable": true,
   "stoch_sigma": 0.02,
   "stoch_length": 30.0,
   "ensemble": 2,
   "seed": 20240617,
-
   "time_order_2": false,
   "t_end": 600.0,
   "save_every": 25.0,
   "make_figures": true,
   "n_snapshots": 0,
-  "outdir": "case_study/outputs"
+  "outdir": "case_study/outputs",
+  "nf_dilution_cal": 0.871
 }

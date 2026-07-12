@@ -607,6 +607,13 @@ class Config:
     # a few % is a per-site CALIBRATION needing that site's transect + a finer grid
     # (do NOT hand-tune a coefficient to one site). See VALIDATION STATUS header.
     farfield_disp_cal: float = 1.0
+    # ---- NEAR-FIELD dilution calibration ------------------------------------
+    # Scales the Roberts (1997) return-dilution coefficient (S_r = 1.6 Fr). This is the knob
+    # a MIXING-ZONE measurement can actually identify: at a deep 60-deg diffuser the mixing-zone
+    # station (x_n = 9 Fr d) is near-field-dominated, so farfield_disp_cal has no leverage there
+    # (a 4x sweep moves the modelled dilution <3.5%) whereas this coefficient sets it directly.
+    # 1.0 = unfitted quiescent-lab value. Fit with `--calibrate-nf <transect.csv>`.
+    nf_dilution_cal: float = 1.0
     # ---- genuine free surface (replaces the rigid lid) ----------------------
     free_surface: bool = True
     eta_max: float = 1.0       # m, clip on surface elevation (linearised FS)
@@ -1025,12 +1032,14 @@ class Grid:
             N2 = max(0.0, -(cfg.g / cfg.rho0) * (rho_s - rho_btm) / max(cfg.depth, 1e-6))
             self.nearfield = nearfield_jet_lagrangian(
                 self.U_d, cfg.d_p, gprime0, cfg.theta_deg, alpha=cfg.entrain_alpha,
-                U_amb=cfg.U_current, N2=N2, n_ports=cfg.n_ports, port_spacing=cfg.port_spacing)
+                U_amb=cfg.U_current, N2=N2, n_ports=cfg.n_ports, port_spacing=cfg.port_spacing,
+                nf_dilution_cal=cfg.nf_dilution_cal)
         else:
             self.nearfield = nearfield_jet(self.U_d, cfg.d_p, gprime0,
                                            cfg.theta_deg, alpha=cfg.entrain_alpha,
                                            n_ports=cfg.n_ports,
-                                           port_spacing=cfg.port_spacing)
+                                           port_spacing=cfg.port_spacing,
+                                           nf_dilution_cal=cfg.nf_dilution_cal)
 
         if cfg.near_field_coupling:
             # seed the 3-D far field with the DILUTED plume at the seabed return
@@ -1569,7 +1578,7 @@ def osmotic_pressure(cfg: Config, S, T):
 #  NEAR-FIELD INTEGRAL JET MODEL  (fixes the near-field accuracy gap)
 # =============================================================================
 def nearfield_jet(U_d, dp, gprime0, theta_deg, alpha=0.030, rho_a=1025.0,
-                  n_ports=1, port_spacing=0.0):
+                  n_ports=1, port_spacing=0.0, nf_dilution_cal=1.0):
     """Calibrated near-field model for a round inclined negatively-buoyant jet.
 
     The sub-grid nozzle cannot be resolved on an affordable 3-D grid, so (as in
@@ -1595,7 +1604,13 @@ def nearfield_jet(U_d, dp, gprime0, theta_deg, alpha=0.030, rho_a=1025.0,
     af = max(0.2, math.sin(th) / s60)         # angle factor vs 60-deg reference
     z_rise = 2.2 * dp * Fr * af
     x_return = 2.4 * dp * Fr * max(0.4, math.cos(th) / math.cos(math.radians(60.0)))
-    dilution_return = 1.6 * Fr
+    # `nf_dilution_cal` scales the Roberts (1997) return-dilution coefficient (1.6) so it can
+    # be FITTED to measured field data. The 1.6 is a QUIESCENT LABORATORY value; a real diffuser
+    # sits in crossflow, waves and shear, which the lab tank does not reproduce (Baum 2019). The
+    # mixing-zone dilution is near-field-dominated (x_n = 9 Fr d), so THIS coefficient — not the
+    # far-field dispersivity — is the parameter a mixing-zone measurement can constrain.
+    # Default 1.0 = unfitted Roberts lab value. See run_nf_calibration()/--calibrate-nf.
+    dilution_return = 1.6 * Fr * max(0.05, nf_dilution_cal)
     width_return = 0.35 * z_rise
     # --- multiport MERGING correction (engineering estimate) -------------
     # Adjacent jets merge when their half-width (~0.4 z_t) reaches s/2, i.e. at
@@ -1684,7 +1699,8 @@ def nearfield_surface(U_d, dp, gprime0, depth, theta_deg=0.0, alpha=0.030):
 
 
 def nearfield_jet_lagrangian(U_d, dp, gprime0, theta_deg, alpha=0.030, rho_a=1025.0,
-                             U_amb=0.0, N2=0.0, n_ports=1, port_spacing=0.0):
+                             U_amb=0.0, N2=0.0, n_ports=1, port_spacing=0.0,
+                             nf_dilution_cal=1.0):
     """I3: higher-fidelity near field that adds the ambient CROSSFLOW and linear
     STRATIFICATION the static Roberts(1997) correlations ignore. Anchored to those
     correlations in the stagnant, unstratified limit (reproduces z_t=2.2 D Fr, S_r=1.6 Fr
@@ -1701,7 +1717,8 @@ def nearfield_jet_lagrangian(U_d, dp, gprime0, theta_deg, alpha=0.030, rho_a=102
     baseline is preserved. Rise decreases and the impact point moves downstream with the
     current (Abessi & Roberts 2017). Stratification traps/lowers the rise (N2-Froude factor)."""
     base = nearfield_jet(U_d, dp, gprime0, theta_deg, alpha=alpha, rho_a=rho_a,
-                         n_ports=n_ports, port_spacing=port_spacing)
+                         n_ports=n_ports, port_spacing=port_spacing,
+                         nf_dilution_cal=nf_dilution_cal)
     th = math.radians(theta_deg); s60 = math.sin(math.radians(60.0))
     z_t = max(base["z_rise"], dp)
     u_b = math.sqrt(max(abs(gprime0), 1e-12) * z_t)          # plume buoyancy-velocity scale
@@ -4446,7 +4463,7 @@ def run_coupling_ab(log, site="roberts2019"):
     return True
 
 
-def run_ctd_calibration(log, ctd_path, base=None):
+def run_ctd_calibration(log, ctd_path, base=None, knob="farfield"):
     """J5: calibrate the far field against YOUR OWN site's CTD/ADCP survey. Reads a CSV with
     a header row containing `distance_m` and either `dS_ppt` (measured excess salinity) and/or
     `dilution`; optional scalar columns S0, S_amb, depth_m, U_current (first row) set the case.
@@ -4502,9 +4519,77 @@ def run_ctd_calibration(log, ctd_path, base=None):
     log.info(f"FIELD CALIBRATION against YOUR CTD/ADCP survey: {ctd_path}")
     log.info(f"  stations(m)={dist}  dS_ppt={dS or '-'}  dilution={dil or '-'}  "
              f"S0={cfg.S0} S_amb={s_amb} depth={cfg.depth}")
+    if knob == "nearfield":
+        if "dilution_target" not in s:
+            log.info("  --calibrate-nf needs a `dilution` column (near-field dilution target)")
+            return False
+        return _calibrate_nf_dilution(log, cfg, s)
     if "dilution_target" in s:
         return _calibrate_dilution(log, cfg, s)
     return _calibrate_decay_length(log, cfg, s)
+
+
+def _calibrate_nf_dilution(log, cfg0, s):
+    """Fit the NEAR-FIELD return-dilution coefficient (nf_dilution_cal, scaling Roberts'
+    S_r = 1.6 Fr) so the modeled dilution at the measured station matches the MEASURED value.
+
+    WHY THIS KNOB: at a deep 60-deg diffuser the mixing-zone station sits inside the near field
+    (x_n = 9.0 Fr d), so farfield_disp_cal has no leverage there (a 4x sweep moves the modeled
+    dilution <3.5%) while this coefficient sets it almost directly. Roberts' 1.6 is a QUIESCENT
+    LABORATORY value; a field diffuser sits in crossflow, waves and shear, so the field
+    coefficient is not obliged to equal the lab one (Baum 2019). Writes nf_calibration.json."""
+    target = float(s["dilution_target"]); xd = float(s["target_dist_m"])
+    dS_target = (cfg0.S0 - s["S_amb"]) / target
+    log.info(f"NEAR-FIELD DILUTION CALIBRATION against {s['name']}")
+    log.info(f"  source: {s['ref']}")
+    log.info(f"  TARGET (MEASURED): dilution {target:.1f}:1 at {xd:.0f} m "
+             f"(ΔS = {dS_target:.3f} ppt); ambient {s['S_amb']} psu, S0 {cfg0.S0} psu")
+    log.info(f"  fitting nf_dilution_cal (scales Roberts S_r = 1.6 Fr; 1.0 = unfitted lab value)")
+    log.info("  nf_cal   modeled dilution@%.0fm   ΔS(ppt)   |dil-target|" % xd)
+    samples = []
+    for cal in [0.4, 0.6, 0.8, 1.0, 1.3]:
+        cfg = dc_replace(cfg0, nf_dilution_cal=cal)
+        r = _modeled_dilution_at(cfg, log, xd)
+        if r is None:
+            log.info(f"  {cal:5.2f}   (diverged) -> skip"); continue
+        err = abs(r["dilution"] - target)
+        samples.append((cal, r["dilution"], r["dS"], err))
+        log.info(f"  {cal:5.2f}   {r['dilution']:10.1f}        {r['dS']:6.3f}   {err:8.1f}")
+    if not samples:
+        log.info("  -> calibration FAILED (all candidates diverged)"); return False
+    cals = np.array([r[0] for r in samples]); dils = np.array([r[1] for r in samples])
+    dmin, dmax = float(dils.min()), float(dils.max())
+    if dmin <= target <= dmax:
+        oo = np.argsort(dils)
+        cal_fit = round(float(np.interp(target, dils[oo], cals[oo])), 3)
+        verdict = "calibrated"
+        val_err = abs(float(np.interp(cal_fit, cals[oo], dils[oo])) - target) / target * 100.0
+        log.info(f"  -> CALIBRATED nf_dilution_cal = {cal_fit:.3f}")
+        log.info(f"     i.e. the FIELD return-dilution coefficient is {1.6*cal_fit:.2f}·Fr, against")
+        log.info(f"     the quiescent-laboratory {1.6:.1f}·Fr of Roberts et al. (1997).")
+        log.info(f"     Set Config.nf_dilution_cal = {cal_fit:.3f} for field-calibrated runs.")
+    else:
+        best = min(samples, key=lambda r: r[3]); cal_fit = 1.0
+        verdict = "out_of_range"; val_err = best[3] / target * 100.0
+        side = "under" if best[1] < target else "over"
+        log.info(f"  -> target {target:.1f}:1 OUTSIDE the achievable range [{dmin:.1f},{dmax:.1f}]; "
+                 f"closest {best[1]:.1f}:1 ({val_err:.0f}% {side}) at nf_cal={best[0]}. Keeping 1.0.")
+    outdir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "nereid_output")
+    os.makedirs(outdir, exist_ok=True)
+    with open(os.path.join(outdir, "nf_calibration.json"), "w") as f:
+        json.dump({"site": s["name"], "reference": s["ref"],
+                   "method": "fit near-field return-dilution coefficient (Roberts S_r=1.6Fr) "
+                             "to MEASURED dilution at the mixing-zone station",
+                   "target_distance_m": xd, "dilution_target_measured": target,
+                   "dS_target_ppt": dS_target, "verdict": verdict,
+                   "fit_error_pct": round(val_err, 1),
+                   "modeled_dilution_range": [dmin, dmax],
+                   "samples_nfcal_dilution_dS": [[c, d, ds] for c, d, ds, _ in samples],
+                   "nf_dilution_cal": cal_fit,
+                   "field_coefficient": round(1.6 * cal_fit, 3),
+                   "lab_coefficient_roberts1997": 1.6}, f, indent=2)
+    log.info(f"     wrote {os.path.join(outdir, 'nf_calibration.json')}")
+    return True
 
 
 def run_field_calibration(log, site="perth"):
@@ -5059,6 +5144,11 @@ def main(argv=None):
                     help="#6: A/B test whether the osmotic/Soret coupling improves the fit, exit")
     ap.add_argument("--calibrate-ctd", type=str, default=None, metavar="FILE",
                     help="J5: calibrate the far field against YOUR site's CTD/ADCP transect CSV, exit")
+    ap.add_argument("--calibrate-nf", type=str, default=None, metavar="FILE",
+                    help="fit the NEAR-FIELD return-dilution coefficient (nf_dilution_cal, scaling "
+                         "Roberts S_r=1.6Fr) to a MEASURED dilution transect CSV, exit. Use this when "
+                         "the measured station lies inside the near field (x_n = 9 Fr d), where "
+                         "--calibrate-ctd's far-field knob has no leverage")
     ap.add_argument("--gpu", action="store_true",
                     help="run the per-step kernels on the GPU via CuPy (needs an NVIDIA GPU + CuPy; "
                          "falls back to CPU/NumPy if absent)")
@@ -5124,7 +5214,7 @@ def main(argv=None):
     if (args.selftest or args.validate or args.benchmark or args.gridconv
             or args.calibrate or args.validate_farfield
             or args.calibrate_transect or args.coupling_ab or args.nest
-            or args.nest_twoway or args.calibrate_ctd
+            or args.nest_twoway or args.calibrate_ctd or args.calibrate_nf
             or args.validate_nearfield_resolved or args.resolved_nearfield):
         _log = build_logger(os.path.join(
             os.path.dirname(os.path.abspath(__file__)), "nereid_output"))
@@ -5183,6 +5273,9 @@ def main(argv=None):
         if args.calibrate_ctd:
             _log.info("=" * 70); _log.info("NEREID-B CTD/ADCP FIELD CALIBRATION")
             ok &= run_ctd_calibration(_log, args.calibrate_ctd)
+        if args.calibrate_nf:
+            _log.info("=" * 70); _log.info("NEREID-B NEAR-FIELD DILUTION CALIBRATION (measured field data)")
+            ok &= run_ctd_calibration(_log, args.calibrate_nf, knob="nearfield")
         return 0 if ok else 1
 
     cfg = Config()
@@ -5273,13 +5366,19 @@ def main(argv=None):
     # model over-disperses (~57:1 vs field 45:1 at Perth; Gacia reach ~2x). The
     # earlier "45:1 to 2.3%" was a discretisation artifact. Far-field numbers are
     # indicative and currently OPTIMISTIC (under-predict impact).
-    log.info("NOTE (validation): near-field = lab-validated correlations. Turbulence "
-             "now physical (k-eps buoyancy SIGN BUG fixed + REALIZABLE k-eps -> no "
-             "nut railing on any grid). FAR-FIELD is CONSERVATIVE and validated to be "
-             "so across the published Perth multi-point transect (--validate-farfield): "
-             "Perth ~35:1 vs documented 45:1 (under-dilutes ~22% = over-predicts impact "
-             "= safe). Gacia reach ~2x (structural). Absolute far-field numbers are "
-             "indicative; a CTD/ADCP survey at the modelled outfall would tighten them.")
+    log.info("NOTE (validation/calibration status): near-field = empirical inclined-dense-jet "
+             "correlations, with the return-dilution coefficient CALIBRATED to MEASURED field "
+             "data (nf_dilution_cal; Gold Coast diffuser, Baum 2019 -> field S_r = 1.39*Fr vs "
+             "the quiescent-lab 1.6*Fr of Roberts et al. 1997). Turbulence physical (k-eps "
+             "buoyancy SIGN BUG fixed + REALIZABLE k-eps -> no nut railing). FAR-FIELD is NOT "
+             "calibrated: farfield_disp_cal is UNIDENTIFIABLE from mixing-zone data (a 4x sweep "
+             "moves the modelled dilution <3.5%, because that station is near-field-dominated) "
+             "and is left at its physical default of 1.0. The model is NOT demonstrably "
+             "conservative: against the four MEASURED Gold Coast cases its dilution error spans "
+             "0.35x-3.4x. (An earlier revision claimed a uniform ~16-25% conservative bias from "
+             "the Perth 45:1 @ 50 m figure; that is a DESIGN/COMPLIANCE target, not a "
+             "measurement, and the claim is WITHDRAWN.) Screening-grade: a CTD/ADCP survey at "
+             "the modelled outfall remains the only route to a site calibration.")
     nf = grid.nearfield
     if cfg.near_field_coupling:
         log.info(f"near-field (validated correlations): Fr={nf['Fr']:.1f}  "

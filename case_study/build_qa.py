@@ -192,9 +192,10 @@ qa("Why Sydney/Kurnell rather than another plant?",
    "on the predicted impact extent.")
 
 qa("What is the intended decision-grade of the output?",
-   "Screening-level assessment. The near field is anchored to validated laboratory scaling and the "
-   "far field is shown conservative against in-class field data. It is not a substitute for a "
-   "consented, survey-calibrated compliance model.")
+   "Screening-level assessment. The near-field return-dilution coefficient is calibrated to measured "
+   "in-class field data; the far field is uncalibrated and is benchmarked, not validated, against that "
+   "data (its dilution error across the four measured cases spans 0.35×–3.4×). It is not a substitute "
+   "for a consented, survey-calibrated compliance model.")
 
 qa("Who is the intended user?",
    "An outfall designer or environmental assessor sizing a diffuser and estimating a mixing-zone "
@@ -739,30 +740,73 @@ qa("Is the domain large enough?",
 section("K.  Calibration")
 
 qa("What exactly was calibrated?",
-   "One scalar: farfield_disp_cal, the multiplier on the tunable horizontal dispersivity. It was "
-   "adjusted so the modelled dilution matched the site transect at the 50 m mixing-zone boundary. "
-   "Everything else — near-field correlations, molecular and turbulent diffusivities — was left "
+   "One scalar: nf_dilution_cal, which scales the near-field return-dilution coefficient. It was fitted "
+   "to MEASURED field data — the 48.4:1 dilution recorded 60 m from the Gold Coast Desalination Plant "
+   "multiport diffuser at 100% plant capacity. The fitted value is 0.871, so the FIELD return-dilution "
+   "coefficient is S_r = 1.39·Fr, against the quiescent-LABORATORY 1.6·Fr of Roberts et al. (1997). "
+   "Everything else — the far-field dispersivity, the molecular and turbulent diffusivities — was left "
    "unfitted.")
+note("Source: Baum, M.J. (2019), 'Dense Jet Behaviour in Dynamic Receiving Environments', PhD thesis, "
+     "University of Queensland, Tables 2.2-2.3; peer-reviewed as Baum, Gibbes, Grinham, Albert, Fisher & "
+     "Gale (2018), J. Hydraul. Eng. 144(11), doi:10.1061/(ASCE)HY.1943-7900.0001524. Input deck: "
+     "case_study/inputs/gcdp_baum_case3-1_transect.csv. Log: validation/nf_calibration.log.")
 
-qa("What value did the calibration return?",
-   "1.00. That is, no adjustment was required: the model reproduced the 44:1 target at 50 m with the "
-   "multiplier at unity, to within about 2%.")
+qa("Why calibrate the NEAR-field coefficient rather than the far-field dispersivity?",
+   "Because that is the parameter the measurement can actually identify. The 60 m station lies INSIDE "
+   "the near-field mixing zone — Roberts et al. (1997) give its length as x_n = 9.0·Fr·d, about 50 m for "
+   "this discharge — so the dilution there is set by near-field jet entrainment, not by far-field "
+   "dispersion. Sweeping farfield_disp_cal over a four-fold range moves the modelled 60 m dilution by "
+   "less than 3.5%; sweeping nf_dilution_cal over 0.40-1.30 moves it from 18.5:1 to 83.4:1. One knob has "
+   "leverage on the observable and the other does not. Fitting the far-field knob to a mixing-zone "
+   "measurement would be fitting a parameter the data cannot see.")
 
-qa("That seems too good. Is it?",
-   "Yes, and the reason is documented in the code. make_site_data.py states that the transect "
-   "stations were chosen so the target would be 'reproducible by the model at no tuning'. The "
-   "calibration target was therefore selected to be one the model already hits.")
-note("Verified: case_study/make_site_data.py, docstring and comment at the ctd_dilution_transect() "
-     "definition. This is the most serious methodological issue in the case study.")
+qa("So is the far field calibrated?",
+   "No. farfield_disp_cal is UNIDENTIFIABLE from the available data and remains at its physical default "
+   "of 1.0 — a default, not a fit. Calibrating it would require measurements far enough out for far-field "
+   "spreading to dominate. A CTD/ADCP survey at the Kurnell outfall is the only route to a genuine "
+   "site calibration of the far field.")
 
-qa("Is that fatal to the case study?",
-   "It is fatal to the word 'calibrated'. It is not fatal to the model, because the far field is "
-   "independently checked against the Perth transect and shown conservative there. The correct "
-   "description is 'uncalibrated, with a representative transect consistent with in-class field data'.")
+qa("Why is the fitted coefficient BELOW the laboratory value?",
+   "Because a real diffuser entrains less than a still laboratory tank. The 1.6·Fr coefficient comes from "
+   "quiescent-ambient experiments; a field diffuser sits in crossflow, waves and velocity shear, which "
+   "degrade near-field entrainment. That the fit moved 13% in exactly that direction is the reason it is "
+   "physically interpretable rather than a numerical fudge — it is the central finding of Baum (2019).")
 
-qa("What are the calibration target's stations?",
-   "Four: 7 m at 37:1, 15 m at 40:1, 25 m at 42:1 and 50 m at 44:1, with the corresponding ΔS values. "
-   "The 50 m value was chosen to sit near the Perth design value of about 45:1 at 50 m.")
+qa("Does the calibration make the predicted impact larger or smaller?",
+   "Larger. Less near-field dilution means more residual salt, so the excess salinity, the seabed "
+   "footprint and the reach all increase relative to the uncalibrated run. Calibrating against measured "
+   "reality made this assessment MORE conservative, not less. That is the direction a screening "
+   "assessment should err in.")
+
+qa("Why fit to only one of the four measured cases?",
+   "Because only one of them is clean enough to fit. Case 3-1 ran at 100% plant capacity (the largest "
+   "brine signal) with an ambient-salinity drift of only -0.10 g/kg. In the other cases the AMBIENT "
+   "background salinity wanders by up to ±2 g/kg while the brine signal at 60 m is at most 0.53 g/kg — "
+   "the noise exceeds the signal, and the source authors explicitly caution against reading dilutions "
+   "from the low-capacity cases. Fitting to those would be fitting noise. They are reported instead as a "
+   "validation spread.")
+
+qa("What does that validation spread show?",
+   "That the model is NOT systematically conservative. Across the four measured cases the modelled 60 m "
+   "dilution divided by the measured value is 0.35, 1.20, 3.38 and 0.53 — the model is optimistic in two "
+   "cases and conservative in two, with errors up to a factor of 3.4. The Roberts (1997) laboratory "
+   "scaling misses the same cases in the same directions. Real crossflow and wave forcing dominate "
+   "case-to-case dilution in a way neither the lab correlations nor this model reproduces.")
+
+qa("An earlier revision claimed the model was ~16-25% conservative. What happened to that?",
+   "It is WITHDRAWN. It rested on the Perth figure of 45:1 at 50 m, which is a DESIGN/COMPLIANCE target "
+   "produced by another model — not a measurement. Against actual measurements the model is optimistic in "
+   "half the cases. Validating against a design target rather than a measurement flipped the sign of the "
+   "safety argument, and the report previously reported only the flattering half.")
+
+qa("Was an earlier version of this study calibrated circularly?",
+   "Yes, and it is worth stating plainly. make_site_data.py used to synthesise a 'site CTD/ADCP dilution "
+   "transect' whose own source comment recorded that its stations were chosen to be 'reproducible by the "
+   "model at no tuning'. Fitting to it guaranteed the farfield_disp_cal = 1.00 that was then reported as "
+   "'no adjustment needed'. In fact the routine had FAILED to find leverage and fallen back to its "
+   "default. That synthetic file has been deleted and replaced by the measured Gold Coast data.")
+note("Verified: the fabricated transect and its generator function are removed from the repository; "
+     "the calibration now consumes case_study/inputs/gcdp_baum_case*_transect.csv.")
 
 qa("Could you calibrate against something real instead?",
    "Yes — the Gold Coast Tugun transect (Baum et al. 2019) is measured, in-class and published, giving "
@@ -823,14 +867,25 @@ qa("Why is 0.51 versus 0.50 acceptable?",
    "physics, so it is the strongest single piece of validation evidence in the project.")
 
 qa("What is the far-field validation result?",
-   "Against the Perth multi-point transect, the model under-predicts dilution at every station — "
-   "about 34:1 at 50 m against a documented 45:1, a ~25% deficit (16–25% across stations). Under-predicting dilution means "
-   "over-predicting impact, so the error is on the protective side.")
+   "It is a benchmark, not a pass. Against the four MEASURED Gold Coast cases the modelled dilution at "
+   "the 60 m mixing-zone boundary divided by the measured value is 0.35, 1.20, 3.38 and 0.53. The model "
+   "lands inside the measured spread but errs by up to a factor of 3.4, in both directions. It is "
+   "therefore NOT demonstrably conservative. The far-field dispersivity itself is uncalibrated and "
+   "unidentifiable from this data (see section K).")
+
+qa("Didn't an earlier version claim the model was conservative by 16–25%?",
+   "It did, and that claim is WITHDRAWN. It came from comparing against Perth's 45:1 at 50 m — which is "
+   "a DESIGN/COMPLIANCE target produced by another model, not a measurement. Against real measurements "
+   "the model over-predicts dilution (and so under-states residual salinity) in half the cases. "
+   "Validating against a modelled target rather than a measurement had flipped the sign of the safety "
+   "argument, and only the flattering half was being reported.")
 
 qa("Is 'conservative' the same as 'correct'?",
-   "No, and the report is careful about this. A ~16–25% dilution deficit is honest model error; it is "
-   "tolerable for screening because it errs toward over-stating impact. For a consent application it "
-   "would need to be reduced or explicitly bounded.")
+   "No — and the model can no longer claim even 'conservative'. Erring toward over-stating impact is "
+   "tolerable for screening; erring toward UNDER-stating it, as the model does in two of the four "
+   "measured cases, is the failure mode that matters. This is why the near-field coefficient was "
+   "calibrated to the measured data (section K), which lowered dilution and raised the predicted "
+   "footprint.")
 
 qa("What independent check exists on the predicted impact extent?",
    f"Clark et al. (2018) measured detectable ecological effects to about 100 m at the actual Kurnell "
@@ -848,7 +903,9 @@ qa("Tell me about the honest note in the solver header regarding an earlier '2.3
    "An earlier build reported that it reproduced Perth's 45:1 to within 2.3%. That was a "
    "discretisation artefact of non-conservative operators combined with the buoyancy sign bug — two "
    "errors partly cancelling. Once the operators were made conservative and the sign fixed, the "
-   "agreement vanished and the honest ~16–25% deficit appeared. Recording this rather than deleting it is "
+   "agreement vanished. The deficit that then appeared was reported as a ~16–25% CONSERVATIVE bias; "
+   "that interpretation has since been withdrawn too, because it was measured against Perth's design "
+   "target rather than against measured data. Recording both corrections rather than deleting them is "
    "the correct scientific practice.")
 
 # =============================================================================
@@ -1066,9 +1123,9 @@ qa("Why does the run now integrate to a longer time with bottom drag on?",
 qa("Does the horizontal reach r_max converge?",
    "No, and it is not treated as a convergence target — for a good reason. r_max is the single "
    "furthest cell above the 0.5 g/kg contour, so a thin filament of near-threshold water creeping "
-   "outward extends it while adding negligible area. An 1800 s run shows r_max creeping ~42→59 m "
-   "while the seabed FOOTPRINT mean stays stable (~2500 m² at both 600 s and 1800 s) and the "
-   "concentration metrics (excess 0.86 g/kg, dilution 36:1) are fully converged (split-half drift "
+   "outward extends it while adding negligible area. An 1800 s run (on the uncalibrated "
+   "configuration) showed r_max creeping ~42→59 m while the seabed FOOTPRINT mean stayed stable and "
+   "the concentration metrics were fully converged (split-half drift "
    "<1%). So r_max is reported as a bound, and the compliance conclusion rests on the converged "
    "footprint and concentration limits, not on r_max. This is a property of r_max as a metric, not a "
    "solver limitation.")
@@ -1092,10 +1149,13 @@ qa("What was the actual fix for the far-field railing?",
 subsection("O.3  Calibration and validation logic")
 
 qa("Is the calibration circular?",
-   "Yes. make_site_data.py chose the transect stations so the target would be 'reproducible by the "
-   "model at no tuning', and the calibration duly returned farfield_disp_cal = 1.00. A procedure that "
-   "recovers unity against a target constructed to be recoverable has demonstrated consistency, not "
-   "predictive skill.")
+   "It WAS, and it no longer is. The earlier make_site_data.py chose its transect stations so the target "
+   "would be 'reproducible by the model at no tuning', and the calibration duly returned "
+   "farfield_disp_cal = 1.00 — a procedure that recovers unity against a target constructed to be "
+   "recoverable demonstrates consistency, not predictive skill. Worse, that 1.00 was not even a fit: the "
+   "routine had failed to find any leverage and fallen back to its default. The synthetic transect is "
+   "deleted. The calibration now fits the near-field coefficient to MEASURED data from the Gold Coast "
+   "diffuser, which the model has never been fitted to otherwise.")
 
 qa("How should it be described instead?",
    "As an uncalibrated run against a representative transect that is consistent with in-class field "
@@ -1109,9 +1169,11 @@ qa("Does --validate really validate the near field?",
 
 qa("So what is the genuinely independent evidence?",
    "Two things. The lock-exchange front Froude number of 0.51 against Benjamin's 0.50, which exercises "
-   "the PDE core with the brine physics switched off entirely. And the Perth far-field transect, to "
-   "which the model was never fitted, and against which it under-predicts dilution by about 16-25 percent "
-   "- an error on the protective side. Everything else is verification.")
+   "the PDE core with the brine physics switched off entirely. And the four MEASURED Gold Coast cases, "
+   "three of which the model was never fitted to (the fourth, Case 3-1, is the calibration target and so "
+   "is not independent evidence). Against those three the model's dilution error spans 0.35x to 3.4x, "
+   "which is honest evidence of screening-grade skill and not a validation pass. Everything else is "
+   "verification.")
 
 qa("The plume-rise cross-check now agrees. Is that independent evidence too?",
    f"It is a consistency check between two parts of the same model, not external validation. The "
@@ -1191,8 +1253,10 @@ qa("How is the solver verified as software, as distinct from validated as physic
 
 qa("What are the four gates and their status after the source-blob fix?",
    "--selftest gives 13/13 PASS; --validate gives 4/4 PASS against Roberts (1997); --benchmark gives a "
-   "lock-exchange Fr_f of about 0.51, PASS; and --validate-farfield perth is conservative at every "
-   "station. All four were re-run after the fix.")
+   "lock-exchange Fr_f of about 0.51, PASS; and --calibrate-nf fits the near-field return-dilution "
+   "coefficient to the MEASURED Gold Coast data (nf_dilution_cal = 0.871). The old fourth gate, "
+   "--validate-farfield perth ('conservative at every station'), has been retired: Perth's 45:1 is a "
+   "design target, not a measurement, and the conservatism claim built on it is withdrawn.")
 
 qa("Is the run deterministic?",
    "Yes, given the seed (20240617). The RNG is seeded per ensemble member as seed + 1009*member, and "
@@ -1236,9 +1300,10 @@ qa("What remains, in priority order?",
    "envelope.")
 
 qa("Which single change would most improve the credibility of the numbers?",
-   "Calibrating against the measured Gold Coast Tugun transect (Baum et al. 2019). It is published, "
-   "in-class, and measured, and it would convert the far field from 'shown conservative' into "
-   "'calibrated and shown conservative'.")
+   "A CTD/ADCP survey at the Kurnell outfall itself. The near field is now calibrated to measured "
+   "in-class data (Gold Coast), which is the best available substitute, but it is another site: its "
+   "crossflow, wave climate and diffuser geometry are not Kurnell's. Only a site survey can calibrate "
+   "the FAR field, which remains uncalibrated and unidentifiable from mixing-zone data.")
 
 qa("What sensitivity case is conspicuously missing?",
    "The near-field constant. The literature splits into a Roberts/Papakonstantis cluster at "
@@ -1372,10 +1437,21 @@ rows = [
      "compute_metrics()",
      "REDUCED by the blob fix (32:1 -> %.1f:1 against a near-field %.1f:1); residual documented"
      % (DILMIN, NFDIL)),
-    ("Calibration target constructed to be 'reproducible by the model at no tuning'",
-     "make_site_data.py:150",
-     "OPEN. The word 'calibrated' removed everywhere. Needs measured data - a site survey, "
-     "or the Gold Coast Tugun transect"),
+    ("Calibration target constructed to be 'reproducible by the model at no tuning'; the "
+     "farfield_disp_cal = 1.00 it returned was not a fit but the routine's fallback after "
+     "failing to find leverage",
+     "make_site_data.py:150 (former); nereid_output/calibration.json",
+     "FIXED. The synthetic transect and its generator are DELETED. The near-field return-dilution "
+     "coefficient is now CALIBRATED to MEASURED in-class field data (nf_dilution_cal = 0.871, from "
+     "the Gold Coast diffuser, Baum 2019) via the new --calibrate-nf gate"),
+    ("Claim that the model is conservative by ~16-25% (under-predicts dilution, over-states impact)",
+     "Perth 45:1 @ 50 m is a DESIGN/COMPLIANCE target, not a measurement; against the four MEASURED "
+     "Gold Coast cases the model's dilution error spans 0.35x-3.4x, optimistic in two of them",
+     "WITHDRAWN from all six documents. The model is not demonstrably conservative"),
+    ("Far-field dispersivity (farfield_disp_cal) is not identifiable from mixing-zone data",
+     "4x sweep moves the modelled 60 m dilution <3.5% (near-field-dominated station, x_n = 9 Fr d)",
+     "OPEN by necessity. Left at its physical default of 1.0 - a default, not a fit. Needs "
+     "measurements far enough out for far-field spreading to dominate, i.e. a site CTD/ADCP survey"),
     ("Ensemble of %d members cannot support a std or a 95th percentile" % NENS,
      "ensemble_stats.npz (exceedance in {0, 0.5, 1})",
      "OPEN. Statistics reported for completeness and explicitly withdrawn as bounds. "

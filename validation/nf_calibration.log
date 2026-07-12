@@ -1,0 +1,10 @@
+15:32:18  NEREID-B NEAR-FIELD DILUTION CALIBRATION (measured field data)
+15:32:18  FIELD CALIBRATION against YOUR CTD/ADCP survey: case_study/inputs/gcdp_baum_case3-1_transect.csv
+15:32:18  NEAR-FIELD DILUTION CALIBRATION against USER CTD/ADCP survey (gcdp_baum_case3-1_transect.csv)
+15:32:18    nf_cal   modeled dilution@60m   ΔS(ppt)   |dil-target|
+15:34:30     0.40         18.5         0.779       29.9
+15:37:07     0.60         29.4         0.490       19.0
+15:39:09     0.80         42.9         0.337        5.5
+15:43:04    -> CALIBRATED nf_dilution_cal = 0.871
+15:43:04       i.e. the FIELD return-dilution coefficient is 1.39·Fr, against
+15:43:04       wrote /home/akosa/brine_analysis/nereid_output/nf_calibration.json

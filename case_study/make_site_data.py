@@ -13,8 +13,19 @@ Provenance of the numbers (documented, not measured per-station):
     (open Tasman Sea shelf climatology, EAC-influenced)
   * Depth-averaged current ~0.12 m/s with M2 tidal modulation +-0.04 m/s
   * Exposed swell climate: Hs ~1.2-1.8 m, Tp ~8-11 s
-  * Site CTD/ADCP dilution transect: deep 60-deg inclined-dense-jet diffuser,
-    return ~38:1, 25 m ~47:1, 50 m (mixing-zone boundary) ~55:1  -> calibration target
+
+NO SITE DILUTION TRANSECT IS GENERATED HERE. An earlier revision of this file
+synthesised a "site CTD/ADCP dilution transect" whose stations were chosen to be
+reproducible by the model without tuning; calibrating against it was circular and
+guaranteed farfield_disp_cal = 1.00. The calibration target is now REAL published
+field data from an in-class outfall, held in
+  inputs/gcdp_baum_case*_transect.csv
+(Gold Coast Desalination Plant offshore multiport diffuser; 60-deg inclined ports,
+open-coastal setting). Source: Baum, M.J. (2019), "Dense Jet Behaviour in Dynamic
+Receiving Environments", PhD thesis, Univ. of Queensland, Tables 2.2-2.3; peer-
+reviewed as Baum, Gibbes, Grinham, Albert, Fisher & Gale (2018), "Near-Field
+Observations of an Offshore Multiport Brine Diffuser under Various Operating
+Conditions", J. Hydraul. Eng. 144(11), doi:10.1061/(ASCE)HY.1943-7900.0001524.
 Deterministic: fixed RNG seed so the deck is reproducible.
 """
 import csv
@@ -139,34 +150,6 @@ def met_wind():
     return _w("met_wind_timeseries.csv", ["time_h", "wind10_ms", "dir_deg_from"], rows)
 
 
-def ctd_dilution_transect():
-    """SITE CTD/ADCP dilution transect along the plume centreline -> the CALIBRATION
-    target consumed by `solver.py --calibrate-ctd`. Deep 60-deg inclined-dense-jet
-    diffuser; dilution grows from the near-field return through the mixing zone.
-    Column names match run_ctd_calibration(): distance_m, dilution, dS_ppt + scalars."""
-    excess = S0 - S_AMB   # 31.5 g/kg
-    # Deep 60-deg diffuser: dilution rises through the near field then grows slowly as
-    # the bottom-trapped dense layer spreads laterally. Mixing-zone (50 m) dilution ~44:1
-    # is consistent with the Perth field transect (~45:1 @ 50 m) and reproducible by the
-    # model at no tuning -> a clean calibration/validation target.
-    stations = [(7.0, 37.0), (15.0, 40.0), (25.0, 42.0), (50.0, 44.0)]  # (m, dilution)
-    rows = []
-    for i, (dist, dil) in enumerate(stations):
-        dS = excess / dil
-        row = [f"{dist:.1f}", f"{dil:.1f}", f"{dS:.3f}"]
-        # site scalars only on the first row (solver reads them via `first()`)
-        if i == 0:
-            row += [f"{S0}", f"{S_AMB}", f"{DEPTH}", f"{U_MEAN}",
-                    f"{D_P}", f"{Q_PORT}", f"{THETA}", f"{N_PORTS}", f"{PORT_SPACING}"]
-        else:
-            row += ["", "", "", "", "", "", "", "", ""]
-        rows.append(row)
-    header = ["distance_m", "dilution", "dS_ppt",
-              "S0", "S_amb", "depth_m", "U_current",
-              "d_p_m", "Q_per_port_m3s", "theta_deg", "n_ports", "port_spacing_m"]
-    return _w("site_ctd_dilution_transect.csv", header, rows)
-
-
 if __name__ == "__main__":
     print("Generating credible SDP-Kurnell site-specific data -> case_study/inputs/")
     bathymetry()
@@ -175,5 +158,5 @@ if __name__ == "__main__":
     adcp_timeseries()
     wave_climate()
     met_wind()
-    ctd_dilution_transect()
-    print("done.")
+    print("done. NOTE: no dilution transect is synthesised; the calibration target is the "
+          "published Gold Coast field data in inputs/gcdp_baum_case*_transect.csv.")

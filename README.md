@@ -40,14 +40,15 @@ validation/             Gate logs + data-source record (selftest, validate, benc
 |------|---------|--------|
 | Robustness invariants | `python3 solver.py --selftest` | **13/13 PASS** |
 | Near-field lab scaling | `python3 solver.py --validate` | **4/4 PASS** (Roberts 1997) |
-| PDE core benchmark | `python3 solver.py --benchmark` | **PASS** (lock-exchange Fr_f ≈ 0.47) |
-| Far-field field transect | `python3 solver.py --validate-farfield perth` | conservative at every station |
+| PDE core benchmark | `python3 solver.py --benchmark` | **PASS** (lock-exchange Fr_f ≈ 0.51 vs theoretical 0.50) |
+| Near-field calibration (measured field data) | `python3 solver.py --calibrate-nf case_study/inputs/gcdp_baum_case3-1_transect.csv` | **CALIBRATED** `nf_dilution_cal = 0.871` |
+| Far-field vs measured field data | 4 measured Gold Coast cases (§10 of the report) | benchmark only — error spans 0.35×–3.4×; **not** systematically conservative |
 
 ## Reproduce the case study
 
 ```bash
 python3 case_study/make_site_data.py                                   # site data
-python3 solver.py --calibrate-ctd case_study/inputs/site_ctd_dilution_transect.csv
+python3 solver.py --calibrate-nf case_study/inputs/gcdp_baum_case3-1_transect.csv   # near-field calibration
 python3 solver.py --config case_study/sydney_sdp_case.json             # run the case
 python3 case_study/postprocess.py                                      # full output suite
 python3 case_study/build_docx.py                                       # build case_study.docx
@@ -65,10 +66,26 @@ The solver is validated and its numerics are sound. The Kurnell case study is **
 and four of its reported quantities are artefacts rather than predictions. This is stated in full in
 §1.1 and §12.4 of `case_study/case_study.docx`.
 
-- **Not calibrated.** `farfield_disp_cal` returned 1.00 against a transect that `make_site_data.py`
-  constructed to be "reproducible by the model at no tuning". That is a consistency check, not a
-  calibration. The independent far-field evidence is the Perth transect (~22% conservative) and the
-  lock-exchange benchmark.
+- **Near field: CALIBRATED to measured field data.** `nf_dilution_cal = 0.871`, fitted to the measured
+  48.4:1 dilution at the 60 m mixing-zone boundary of the Gold Coast Desalination Plant diffuser
+  (Case 3-1, 100% capacity) — Baum (2019), PhD thesis, Univ. of Queensland, Tables 2.2–2.3;
+  peer-reviewed as Baum, Gibbes, Grinham, Albert, Fisher & Gale (2018), *J. Hydraul. Eng.* 144(11),
+  doi:10.1061/(ASCE)HY.1943-7900.0001524. The fitted **field** return-dilution coefficient is
+  `S_r = 1.39·Fr`, 13% below the quiescent-**laboratory** `1.6·Fr` of Roberts et al. (1997) — a real
+  diffuser in crossflow, waves and shear entrains less than a still lab tank. This *lowers* dilution and
+  therefore *raises* the predicted footprint: calibrating against reality made the assessment more
+  conservative, not less.
+- **Far field: NOT calibrated, and cannot be from this data.** `farfield_disp_cal` is *unidentifiable* —
+  a 4× sweep moves the modelled mixing-zone dilution by <3.5%, because that station is
+  near-field-dominated (`x_n = 9·Fr·d`). It stays at its physical default of 1.0: a default, not a fit.
+  A CTD/ADCP survey at Kurnell is the only route to calibrating it.
+- **The model is NOT demonstrably conservative.** Against the four *measured* Gold Coast cases its
+  dilution error spans 0.35×–3.4×, with no consistent sign. An earlier revision claimed a uniform
+  ~16–25% conservative bias; that rested on the Perth 45:1 @ 50 m figure, which is a **design/compliance
+  target, not a measurement**, and the claim is **withdrawn**.
+- **A prior revision was calibrated circularly.** `make_site_data.py` used to synthesise a "site CTD/ADCP
+  transect" whose stations its own source comment recorded as chosen to be *"reproducible by the model at
+  no tuning"*. Fitting to it guaranteed the unity result it produced. That file is deleted.
 - **The source blob is grid-limited.** `solver.py:1012` floors the seed width at
   `1.5*max(dx, dz)` = 8.65 m against a physical return-plume width of 2.50 m, injecting brine over
   ~⅓ of the water column. Consequently `S_max` is exactly the injected `S_source`, the 32:1 minimum

@@ -75,14 +75,61 @@ Accepted full-depth Boussinesq high-Re value: front Froude number
   17(1):89–90 (realizable time-scale limiter).
 - **Munk & Anderson (1948)** *Notes on a theory of the thermocline.* J. Marine Res. 7:276–295.
 
-## 5. Site calibration — SDP Kurnell CTD/ADCP transect (CALIBRATION)
+## 5. Near-field calibration — MEASURED Gold Coast field data (CALIBRATION)
 
-Representative (credible, not measured per-station) survey — `case_study/inputs/
-site_ctd_dilution_transect.csv`. Stations/dilution: 7 m→37:1, 15 m→40:1, 25 m→42:1,
-50 m→44:1. **Result:** model reproduces 44:1 at the mixing-zone boundary at
-`farfield_disp_cal = 1.0` (no hand-tuning; 2% error) — see `validation/ctd_calibration.log`
-and `nereid_output/calibration.json`. Consistent with the Perth ~45:1 @50 m design value
-and the Gold Coast measured range.
+**Source (primary, read directly).** Baum, M.J. (2019). *Dense Jet Behaviour in Dynamic
+Receiving Environments.* PhD thesis, School of Civil Engineering, University of Queensland.
+Chapter 2, Tables 2.2–2.3. Peer-reviewed as **Baum, Gibbes, Grinham, Albert, Fisher & Gale
+(2018)**, *Near-Field Observations of an Offshore Multiport Brine Diffuser under Various
+Operating Conditions*, J. Hydraul. Eng. 144(11), doi:10.1061/(ASCE)HY.1943-7900.0001524.
+Diffuser configuration independently corroborated by **Baum et al. (2017)**, Int. J. Civil &
+Environmental Engineering 11(6):711–717.
+
+**Site (in-class with Kurnell).** Gold Coast Desalination Plant offshore multiport diffuser,
+Tugun QLD: 203 m diffuser, 14 ports at 13.9 m spacing, internal port diameter 0.238 m, ports
+inclined at 60°, discharge elevation 2.5 m above the seabed, mean depth 17.7 m, open coast.
+Regulatory mixing zone at 60 m. Config self-check: Q₀ = 2.30/14 = 0.164 m³/s → U₀ = 3.69 m/s,
+g′ = 0.108 m/s² → **Fr = 23.0 against the published 23.4** (2% — confirms the table was read
+correctly).
+
+**MEASURED boundary dilution at 60 m** (thesis Table 2.3, "Field"):
+
+| Case | Capacity | Fr | Measured S @ 60 m | NEREID-B @ 60 m (cal = 1.0) | model ÷ measured |
+|------|----------|------|-------|-------|-------|
+| 2-2  | 33%      | 10.7 | 67.7:1 | 24.0:1 | 0.35 |
+| 3-1  | **100%** | 23.4 | **48.4:1** | 58.2:1 | 1.20 |
+| 4-1  | 66%      | 24.1 | 22.4:1 | 75.8:1 | 3.38 |
+| 4-2  | 66%      | 16.6 | 66.6:1 | 35.6:1 | 0.53 |
+
+**Result — CALIBRATED:** `nf_dilution_cal = 0.871`, fitted to Case 3-1 (the only case with a
+clean signal: full capacity, ambient drift −0.10 g/kg). Fitted **field** return-dilution
+coefficient **S_r = 1.39·Fr**, against the quiescent-**laboratory** 1.6·Fr of Roberts et al.
+(1997) — a real diffuser in crossflow/waves/shear entrains ~13% less than a still tank, which
+is the central finding of Baum (2019). Sweep: nf_dilution_cal 0.40→1.30 spans 18.5:1→83.4:1,
+so the target is properly bracketed. See `validation/nf_calibration.log`,
+`nereid_output/nf_calibration.json`, `case_study/inputs/gcdp_baum_case*_transect.csv`.
+
+**NOT calibrated — far field.** `farfield_disp_cal` is **unidentifiable** from mixing-zone
+data: a 4× sweep (0.5→2.0) moves the modelled 60 m dilution by <3.5% in every case, because
+that station is near-field-dominated (x_n = 9·Fr·d ≈ 50 m). It stays at its physical default
+of 1.0 — a default, **not a fit**. Needs stations far beyond the mixing zone, i.e. a site
+CTD/ADCP survey at Kurnell.
+
+**Caveats, stated plainly.** (i) The three non-fitted cases are ambient-noise-limited: the
+brine signal at 60 m is ≤0.53 g/kg while the *ambient* background varies by ±2 g/kg, and the
+source authors caution against reading dilutions from the low-capacity cases. They are reported
+as a **validation spread**, not fit targets — across them the model errs by 0.35×–3.4× in both
+directions, so it is **not demonstrably conservative**. (ii) Gold Coast is **not Kurnell**: its
+crossflow, wave climate and diffuser geometry differ. This is an in-class calibration, the best
+available substitute for a site survey — not a site calibration.
+
+**WITHDRAWN.** A prior revision calibrated against `site_ctd_dilution_transect.csv`, a synthetic
+transect whose own generator comment recorded that its stations were chosen to be *"reproducible
+by the model at no tuning"*. The `farfield_disp_cal = 1.00` it "returned" was not a fit but the
+routine falling back to its default after failing to find leverage. That file and its generator
+are **deleted**. The associated claim that the model is *"conservative, under-predicting dilution
+by ~16–25%"* rested on Perth's 45:1 @ 50 m — a **design/compliance target, not a measurement** —
+and is **withdrawn** from all documents.
 
 ## 6. Regulatory mixing-zone limits (context)
 
