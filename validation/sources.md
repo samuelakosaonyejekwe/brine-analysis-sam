@@ -59,15 +59,36 @@ with a lower cluster ≈ 1.07 (Lai & Lee).
 ## 3. PDE core — lock-exchange gravity-current benchmark (VALIDATION)
 
 Accepted full-depth Boussinesq high-Re value: front Froude number
-`F_H = U/√(g′H) = 0.50` (half-depth energy-conserving current).
-**NEREID-B:** `Fr_f ≈ 0.47` → **PASS** (`--benchmark`).
+`F_H = U/√(g′H) = 0.500` (half-depth energy-conserving current).
+**NEREID-B:** `Fr_f = 0.51` → **PASS** (`--benchmark`), i.e. ~2% FAST — see the caveat below.
+
+**TARGET VERIFIED AT SOURCE, INCLUDING THE NORMALISATION.** Benjamin's front condition is
+
+    U / √(g′H)  =  √[ h(1−h)(2−h) / (1+h) ]      (h = current depth as a fraction of H)
+
+At the energy-conserving depth `h = H/2` this evaluates to **exactly 0.5000**. It is normalised
+on the **FULL depth H**, which is the same convention the solver uses (`Fr_f = U_f/√(g′H)`), so
+the comparison is like-for-like. This matters because the usual failure mode with this benchmark
+is a convention mismatch: the other constants in this literature — the √2 thin-current limit, and
+the deep-ambient value of **1** that Shin et al. (2004) derive *in place of* √2 — belong to
+different normalisations and regimes and must **not** be compared against ours.
+
+**CAVEAT — the model is on the fast side, and the sign is worth recording.** Shin et al. (2004)
+show the energy-conserving theory holds at high Re but that dissipation reduces the front speed
+by *a few per cent below* the energy-conserving value. A physical current should therefore sit
+slightly **under** 0.500. NEREID-B sits ~2% **over** it. The magnitude is small and inside any
+sensible band for a finite grid, and it changes no conclusion — but it is the *opposite* sign to
+the expected dissipative bias, and the solver's own note that "turbulent damping lowers it" is
+not what its own number does.
 
 - **Benjamin (1968)** *Gravity currents and related phenomena.* J. Fluid Mech. 31(2):209–248.
-  **doi:10.1017/S0022112068000133 (verified)**. F_H=0.50.
+  doi:10.1017/S0022112068000133. F_H = 0.500 at h = H/2 (front condition above, evaluated).
 - **Shin, Dalziel & Linden (2004)** *Gravity currents produced by lock exchange.* J. Fluid
-  Mech. 521:1–34. **doi:10.1017/S002211200400165X (verified)**. Confirms F_H=0.50.
-- **Huppert & Simpson (1980)** J. Fluid Mech. 99(4):785. **doi:10.1017/S0022112080000894
-  (verified)** — deep-ambient F_h=1.19 (different scaling; do not conflate).
+  Mech. 521:1–34. doi:10.1017/S002211200400165X. Confirms the energy-conserving theory; finds
+  dissipation reduces the front speed a few % below it; derives deep-ambient front Fr = 1
+  (not √2) — a different regime, do not conflate.
+- **Huppert & Simpson (1980)** J. Fluid Mech. 99(4):785. doi:10.1017/S0022112080000894 —
+  deep-ambient F_h ≈ 1 (different scaling; do not conflate).
 
 ## 4. Turbulence-closure basis (MODEL)
 

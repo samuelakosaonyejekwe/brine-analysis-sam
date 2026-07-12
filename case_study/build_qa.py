@@ -861,10 +861,24 @@ qa("What does the lock-exchange benchmark test?",
    "near-field model, in which a density front is released. The front Froude number should be "
    "F_H = 0.50 (Benjamin 1968; Shin et al. 2004). NEREID-B returns 0.51.")
 
-qa("Why is 0.51 versus 0.50 acceptable?",
-   "A ~2% deviation (marginally above the inviscid value) is well within the expected range for a "
-   "finite grid with the length-scale-limited closure. The benchmark is genuinely independent of the brine "
-   "physics, so it is the strongest single piece of validation evidence in the project.")
+qa("Has the 0.50 target itself been verified against the source?",
+   "Yes, and the normalisation checked — which is where this benchmark usually goes wrong. Benjamin's "
+   "front condition is U/sqrt(g'H) = sqrt[h(1-h)(2-h)/(1+h)], with h the current depth as a fraction "
+   "of the channel depth H. At the energy-conserving depth h = H/2 this evaluates to exactly 0.5000. "
+   "Crucially it is normalised on the FULL depth H, which is the same convention the solver uses "
+   "(Fr_f = U_f/sqrt(g'H)), so the comparison is like-for-like. The other numbers in this literature — "
+   "sqrt(2), and the deep-ambient value of 1 that Shin et al. (2004) derive in place of it — belong to "
+   "different normalisations and regimes and must not be compared against ours.")
+
+qa("Why is 0.51 versus 0.50 acceptable — and is the direction right?",
+   "The 2% magnitude is well within what a finite grid with a length-scale-limited closure should give, "
+   "and the benchmark is genuinely independent of the brine physics, so it remains the strongest single "
+   "piece of validation evidence in the project. But the DIRECTION deserves recording: Shin et al. (2004) "
+   "find that dissipation reduces the real front speed by a few percent BELOW the energy-conserving 0.50, "
+   "so a physical current should sit UNDER it. NEREID-B sits 2% OVER it. The model is therefore slightly "
+   "fast, not slightly damped, and the solver's own note that 'turbulent damping lowers it' is not what "
+   "its own number does. The discrepancy is small and does not change any conclusion, but it is the "
+   "opposite sign to the expected dissipative bias and is reported rather than smoothed over.")
 
 qa("What is the far-field validation result?",
    "It is a benchmark, not a pass. Against the four MEASURED Gold Coast cases the modelled dilution at "

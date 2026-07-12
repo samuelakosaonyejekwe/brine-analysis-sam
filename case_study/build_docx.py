@@ -632,7 +632,12 @@ table(["Level", "Benchmark / data (source)", "Accepted value", "NEREID-B result"
         % (round(min(g('r_max_m', 0), ss.get('r_max_m_mean', 0))),
            round(max(g('r_max_m', 0), ss.get('r_max_m_mean', 0))))],
        ["PDE core", "Lock-exchange front Froude number — Benjamin (1968); Shin et al. (2004)",
-        "F_H = 0.50", "Fr_f ≈ 0.51 — PASS"],
+        "F_H = 0.500 exactly (VERIFIED at source: Benjamin's front condition "
+        "U/√(g′H) = √[h(1−h)(2−h)/(1+h)] evaluates to 0.5000 at the energy-conserving "
+        "depth h = H/2; same full-depth normalisation the solver uses)",
+        "Fr_f ≈ 0.51 — PASS, but ~2% FAST. Shin et al. (2004) find dissipation lowers the "
+        "real front a few % BELOW 0.50, so a physical current should sit under it; the model "
+        "sits over it. Small, but the sign is opposite to the expected dissipative bias."],
        ["Robustness", "Invariants: mass/positivity/divergence/EOS/restart — solver.py",
         "exact / bounded", "13/13 self-tests PASS"]],
       caption="Table 11.1 — Validation summary (verified sources; see §17 and validation/sources.md). "
