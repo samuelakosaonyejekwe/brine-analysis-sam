@@ -141,6 +141,29 @@ def g(key, default=None):
 
 excess_src = C["S0"] - C["S_amb_surf"]
 
+# ---- EPL 12904 condition O5.1 compliance point ------------------------------------------
+# The licence sets the limit (1 ppt above background) at "the edge of the near field mixing
+# zone" and specifies NO distance in metres. For an inclined dense jet that edge is the end of
+# the near-field mixing zone, x_n = 9.0 Fr d (Roberts et al. 1997) — NOT the 50-100 m an earlier
+# revision assumed, which flattered the margin badly.
+X_N = 9.0 * g("Fr_d", 0.0) * C["d_p"]
+
+
+def _seabed_excess_at(x_m):
+    """Modelled near-bed excess salinity (g/kg) at distance x_m along the plume centreline."""
+    try:
+        _, rows = read_csv(os.path.join(OUT, "seabed_centerline_transect.csv"))
+    except OSError:
+        return None
+    pts = [(float(r[0]), float(r[1])) for r in rows if r[1]]
+    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+        if x0 <= x_m <= x1:
+            return y0 + (y1 - y0) * (x_m - x0) / (x1 - x0)
+    return None
+
+
+DS_AT_XN = _seabed_excess_at(X_N)
+
 # ============================================================ TITLE
 ti = doc.add_heading("Industrial Case Study", level=0)
 for r in ti.runs:
@@ -207,14 +230,27 @@ bullet(f"Calibration: the NEAR-FIELD return-dilution coefficient is FITTED to ME
        f"Coast multiport diffuser at full plant capacity (Baum 2019). The FAR-FIELD dispersivity is "
        f"UNIDENTIFIABLE from mixing-zone data and is left at its default of 1.0 — a default, not a "
        f"fit (§10).")
-P(f"Mixing-zone assessment: against a conservative sub-lethal assessment contour of "
-  f"ΔS = {C['dS_crit']} g/kg (more protective than the ~1 ppt typical of NSW mixing-zone "
-  f"practice), the model predicts a seabed excess-salinity footprint of "
+P(f"REGULATORY COMPLIANCE — assessed at the point the licence actually specifies. The binding "
+  f"condition is EPL 12904 (NSW EPA) condition O5.1: the salinity must be within 1 part per "
+  f"thousand of background AT THE EDGE OF THE NEAR-FIELD MIXING ZONE. The licence gives NO "
+  f"distance in metres; for this discharge that edge is x_n = 9.0·Fr·d ≈ {X_N:.0f} m "
+  f"(Roberts et al. 1997), well inside the plume rather than out at 50–100 m. "
+  + (f"The modelled near-bed excess there is {DS_AT_XN:.2f} g/kg against the 1.0 ppt limit — "
+     f"COMPLIANT, with a margin of {100*(1-DS_AT_XN):.0f}%. "
+     if DS_AT_XN is not None else "")
+  + f"An earlier revision of this report assessed compliance at 50–100 m, where ΔS is only "
+    f"~0.2 g/kg; that assumption flattered the margin roughly threefold and is corrected here. "
+    f"The peak excess anywhere ({g('excess_max', 0):.2f} g/kg) occurs within ~20 m, INSIDE the "
+    f"mixing zone, where the licence limit does not apply. The other jurisdictions' limits are "
+    f"met with room to spare (Perth 1.2 ppt at 50 m; Gold Coast ~2 PSU at 60 m; California "
+    f"2.0 ppt at 100 m). Note the compliance point lies inside the NEAR field — so it is "
+    f"governed by the near-field coefficient, which IS calibrated to measured data (§10), and "
+    f"not by the uncalibrated far-field dispersivity.", color=TEAL)
+P(f"Mixing-zone footprint: against a sub-lethal assessment contour of "
+  f"ΔS = {C['dS_crit']} g/kg (more protective than the 1 ppt licence limit), the model predicts "
+  f"a seabed excess-salinity footprint of "
   f"≈ {g('seabed_footprint_m2', 0):.0f} m² within roughly {g('r_max_m', 0):.0f}–"
-  f"{ss.get('r_max_m_mean', 0):.0f} m of the diffuser. The maximum excess anywhere in the "
-  f"domain is {g('excess_max', 0):.2f} g/kg, comfortably inside every applicable limit "
-  f"(NSW ~1 ppt; Perth 1.2 ppt at 50 m; California 2.0 ppt at 100 m), so the compliance "
-  f"conclusion is robust even where the footprint precision is not. Run health is exact "
+  f"{ss.get('r_max_m_mean', 0):.0f} m of the diffuser. Run health is exact "
   f"(divergence {g('divergence_final', 0):.1e}, mass imbalance "
   f"{g('mass_imbalance_final', 0):.1e}, eddy-viscosity cap engaged in "
   f"{100*g('nut_cap_fraction', 0):.0f}% of cells — physical, no railing).")
@@ -568,8 +604,24 @@ P("Result 1 — the FAR-FIELD knob is UNIDENTIFIABLE, so it was not fitted. Swee
   "mixing zone — Roberts et al. (1997) give its length as X_n = 9.0·Fr·d ≈ 50 m for this "
   "discharge — so the dilution there is set by near-field jet entrainment, not by far-field "
   "dispersion. farfield_disp_cal therefore remains at its physically-derived default of 1.0: "
-  "a default, not a fit. The far field of this model is NOT calibrated, and a site CTD/ADCP "
-  "survey at Kurnell remains the only route to calibrating it.", color=TEAL)
+  "a default, not a fit. The far field of this model is NOT calibrated.", color=TEAL)
+P("Can the far field be calibrated at all? This was investigated rather than assumed, and the "
+  "answer is no — not from any measurement that exists. The knob does acquire leverage further "
+  "out: a 4× sweep moves the modelled dilution by 3.5% at the 60 m mixing-zone station but by "
+  "15% at 150 m (1185:1 → 1010:1). So a far-field calibration would need measured stations "
+  "beyond ~100 m. The difficulty is that at those distances the brine signal has decayed into "
+  "the instrument noise. The WA EPA's Perth model-validation report — the most thorough "
+  "far-field brine study available — gives far-field near-bed salinity increases of 0.0–0.45 "
+  "units across its monitoring rings, notes that these are derived from comparisons between "
+  "simulations WITH and WITHOUT the discharge (a quantity that cannot be measured), and states "
+  "that such increases are “close to the accuracy and precision of the most accurate salinity "
+  "measurements undertaken with CTDs”, whose dynamic accuracy is “at best 0.02 units”. By the "
+  "distance at which far-field dispersion controls the plume, the anomaly is at the CTD noise "
+  "floor and inside natural background variability. Calibrating a far-field dispersion "
+  "coefficient for a deep 60° diffuser is therefore neither realistic nor standard practice: "
+  "the far field of such models is CHARACTERISED, not fitted. This does not weaken the "
+  "compliance verdict, because EPL 12904 sets the compliance point at the edge of the NEAR-field "
+  "mixing zone (§15), which is governed by the coefficient that IS calibrated.", color=TEAL)
 P("Result 2 — the NEAR-FIELD dilution coefficient IS identifiable, and has been CALIBRATED "
   "against the measured data. Because the mixing-zone station is near-field-dominated, the "
   "parameter the measurement constrains is the near-field return-dilution coefficient — "
@@ -820,11 +872,24 @@ P(f"The model predicts a seabed excess-salinity footprint above the conservative
   f"{g('z_deepest_m', 0) - g('plume_top_m', 0):.1f} m of the water column. This assessment "
   f"contour is more protective than the ~1 ppt above ambient typical of NSW mixing-zone "
   f"practice.")
-P(f"The compliance conclusion is robust. The maximum excess salinity anywhere in the domain is "
-  f"{g('excess_max', 0):.2f} g/kg, so the discharge sits inside every applicable concentration "
-  f"limit with margin — NSW ~1 ppt at the mixing-zone edge, Perth 1.2 ppt at 50 m, Gold Coast "
-  f"~2 PSU at 60 m, and the binding California Ocean Plan 2.0 ppt at 100 m. That conclusion "
-  f"survives every caveat in §1.1."
+P(f"The compliance conclusion holds, but the margin is narrower than earlier revisions of this "
+  f"report claimed, and the reason is worth stating precisely. The binding condition is EPL 12904 "
+  f"condition O5.1: ΔS ≤ 1 ppt above background AT THE EDGE OF THE NEAR-FIELD MIXING ZONE. The "
+  f"licence specifies no distance; that edge is x_n = 9.0·Fr·d ≈ {X_N:.0f} m for this discharge, "
+  f"not the 50–100 m previously assumed. "
+  + (f"The modelled near-bed excess at {X_N:.0f} m is {DS_AT_XN:.2f} g/kg against the 1.0 ppt "
+     f"limit: COMPLIANT with a {100*(1-DS_AT_XN):.0f}% margin, where assessing at 50 m would have "
+     f"reported ~0.2 g/kg and an apparent ~80% margin. "
+     if DS_AT_XN is not None else "")
+  + f"The peak excess anywhere ({g('excess_max', 0):.2f} g/kg) sits within ~20 m — inside the "
+    f"mixing zone, where the limit does not bite. The other limits are met with room to spare: "
+    f"Perth 1.2 ppt at 50 m, Gold Coast ~2 PSU at 60 m, and the California Ocean Plan 2.0 ppt at "
+    f"100 m. Two things temper this. First, the compliance point lies inside the NEAR field, so "
+    f"the verdict rests on the near-field coefficient — which is calibrated to measured data "
+    f"(§10), but against which the model still errs by up to 3.4× on individual measured cases. "
+    f"Second, the operator's own EPL 12904 annual report records a real exceedance of O5.1 on "
+    f"22 July 2025, so this limit is not academic. A 29%-margin screening result is not a consent "
+    f"case; it is a reason to commission the site survey recommended in §16."
   + ("" if STEADY else
      " The footprint precision is weaker: with bottom drag the reach is bounded but oscillates "
      "with the tidal/stochastic forcing rather than settling to a single value, and the footprint "
@@ -937,6 +1002,24 @@ refs = [
     "Assessment of the Gold Coast Desalination Plant Offshore Multiport Brine Diffuser during "
     "'Hot Standby' Operation. Int. J. Civil & Environmental Engineering 11(6): 711–717. "
     "(Independent corroboration of the diffuser configuration used above.)",
+    "REGULATORY SOURCE (binding, VERIFIED) — NSW Environment Protection Licence EPL 12904, "
+    "condition O5.1, quoted verbatim in Veolia, 'Sydney Desalination Plant Annual Performance "
+    "Report (EPL 12904), 2024–25', §5.7: the salinity of the seawater concentrate must be "
+    "'within 1 part per thousand (ppt) of background salinity' at 'the edge of the near field "
+    "mixing zone of the discharge plume'. NO distance in metres is specified — the compliance "
+    "point is the near-field mixing-zone edge (x_n = 9.0·Fr·d ≈ 26 m here), not 50–100 m. "
+    "Condition O5.2 disapplies the requirement at or below background salinity. The same report "
+    "records an exceedance of O5.1 on 22 July 2025.",
+    "FAR-FIELD EVIDENCE — BMT/Oceanica, 'Perth Desalination Plant Discharge Modelling: Model "
+    "Validation', Appendix D of the PSDP2 referral documentation, WA Environmental Protection "
+    "Authority (epa.wa.gov.au). Establishes: (a) the Perth diffuser is ~163 m with forty 0.13 m "
+    "ports inclined at 60°, elevated 1.0 m; (b) the widely-quoted 45:1 at 50 m is explicitly a "
+    "DESIGN TARGET, not a measurement — the basis on which this report withdraws the former "
+    "'conservative by 16–25%' claim; (c) far-field near-bed salinity increases across the "
+    "monitoring rings are 0.0–0.45 units and are MODEL-DERIVED, and the report states they are "
+    "'close to the accuracy and precision of the most accurate salinity measurements undertaken "
+    "with CTDs' (Seabird accuracy 'at best 0.02 units') — the evidence that a far-field "
+    "dispersion coefficient cannot be calibrated from any existing measurement (§10).",
     "Clark, G.F. et al. (2018). First large-scale ecological impact study of a desalination "
     "outfall (Sydney/Kurnell). Water Research 145: 757–768. doi:10.1016/j.watres.2018.08.071.",
     "Benjamin, T.B. (1968). Gravity currents and related phenomena. J. Fluid Mech. 31(2): 209–248. "

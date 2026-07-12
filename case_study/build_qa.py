@@ -955,10 +955,12 @@ qa(f"Why is the minimum dilution ({DILMIN:.1f}:1) still below the near-field ret
    "(35.4 rather than 35.6 g/kg), so the same absolute salinity reports a lower dilution. It is the "
    "same artefact that produced the earlier build's 32:1, now much reduced but not eliminated.")
 
-qa("Why does the seabed footprint fall to zero for thresholds above 0.8 g/kg?",
-   "Because the maximum excess salinity anywhere on the seabed is about 0.84 g/kg, so any contour "
-   "above that encloses no area. The domain maximum sits a few metres above the bed, inside the seed "
-   "blob, not on the seabed itself.")
+qa("Why does the seabed footprint fall to zero at the 1.0 g/kg threshold?",
+   "Because the maximum excess salinity anywhere on the seabed is about 0.96 g/kg, so the 1.0 g/kg "
+   "contour encloses no area — it clears the line by 0.04 g/kg. Note this is much tighter than before "
+   "calibration, when the seabed peak was 0.84 g/kg and BOTH the 0.9 and 1.0 contours were empty; the "
+   "0.9 contour now encloses a real 1,514 m2. The domain maximum (0.99 g/kg) sits a few metres above "
+   "the bed, inside the seed blob, not on the seabed itself.")
 
 qa("Why do the headline footprint and the isopleth table differ slightly?",
    "They use different estimators. The isopleth table counts wet seabed cells at "
@@ -1012,14 +1014,36 @@ qa("What assessment threshold was adopted and why?",
    "of the California Ocean Plan.")
 
 qa("What are the relevant regulatory limits?",
-   "California Ocean Plan: ≤ 2.0 ppt above background at ≤ 100 m (binding). Perth/Cockburn Sound: "
-   "≤ 1.2 ppt at 50 m and ≤ 0.8 ppt at 1,000 m. Gold Coast: ~2 PSU at 60 m. NSW/Kurnell: within about "
-   "1 ppt at the mixing-zone edge, exact EPL distance unverified.")
+   "The BINDING one for this site is NSW EPL 12904, condition O5.1, verified verbatim against the "
+   "operator's annual report: the salinity must be 'within 1 part per thousand (ppt) of background "
+   "salinity' at 'the edge of the near field mixing zone of the discharge plume'. Note carefully: the "
+   "licence specifies NO DISTANCE in metres — the compliance point is the edge of the NEAR field, "
+   "which for this discharge is x_n = 9.0·Fr·d, about 26 m, not the 50–100 m an earlier revision of "
+   "this report assumed. Condition O5.2 disapplies the requirement when the concentrate salinity is at "
+   "or below background. For context: California Ocean Plan ≤ 2.0 ppt at ≤ 100 m; Perth/Cockburn Sound "
+   "≤ 1.2 ppt at 50 m and ≤ 0.8 ppt at 1,000 m; Gold Coast ~2 PSU at 60 m.")
+
+qa("Why does the compliance POINT matter so much?",
+   "Because it moved the margin by a factor of three. Assessed at 50 m — the old assumption — the "
+   "modelled excess is about 0.2 g/kg against a 1 ppt limit, an apparent 80% margin. Assessed where the "
+   "licence actually bites, at the ~26 m near-field mixing-zone edge, it is about 0.71 g/kg: still "
+   "compliant, but with a 29% margin. The earlier figure was not wrong arithmetic; it was the right "
+   "arithmetic at the wrong place.")
+
+qa("Is the NSW limit academic?",
+   "No. The operator's own EPL 12904 annual performance report records that on 22 July 2025 'the "
+   "calculated Edge of the near field mixing zone of the discharge plume was greater than 1 ppt of "
+   "background salinity' — a real exceedance at the real plant. A 29% modelled margin on a "
+   "screening-grade tool is not a consent case.")
 
 qa("Does the predicted plume comply?",
-   f"Against every limit above, comfortably: the maximum excess anywhere is {EXMAX:.2f} g/kg, below even "
-   f"the most stringent 1.2 ppt criterion, and the seabed maximum is about 0.84 g/kg. Compliance is not "
-   f"marginal, which limits the practical significance of the residual reach uncertainty.")
+   f"Yes, but with a 29% margin, not a comfortable one. At the licence's compliance point — the edge of "
+   f"the near-field mixing zone, about 26 m — the modelled near-bed excess is about 0.71 g/kg against "
+   f"the 1.0 ppt limit of EPL 12904 O5.1. The maximum excess anywhere is {EXMAX:.2f} g/kg, below even "
+   f"the most stringent 1.2 ppt criterion, and the seabed maximum is about 0.96 g/kg. But compliance IS "
+   f"now closer to marginal than earlier revisions implied — a 29% margin at the licence point, and a "
+   f"core that clears the 1.0 g/kg line by 0.01 g/kg — so the residual reach uncertainty matters more, "
+   f"not less.")
 
 qa("How sensitive is compliance to the reach oscillation?",
    f"Not at all for the concentration-based limits, which are met everywhere in the domain. The reach "
@@ -1364,10 +1388,14 @@ qa("Was that the same defect as the source blob?",
    "documents then misread the datum and drew a reassuring conclusion from an alarming number.")
 
 qa("Did the slides misrepresent the calibration data?",
-   "Yes. Slide 10 displayed a five-station transect - 22:1 at 10 m, 33:1 at 25 m, 44:1 at 50 m, 52:1 at "
-   "75 m, 60:1 at 100 m - and the notes called it 'measured CTD/ADCP dilution data'. The actual file "
-   "has four stations: 37:1 at 7 m, 40:1 at 15 m, 42:1 at 25 m, 44:1 at 50 m. Only the 50 m point "
-   "matched, and none of it is measured.")
+   "Yes, twice over, and both misrepresentations are now fixed. Slide 10 displayed a five-station "
+   "transect - 22:1 at 10 m, 33:1 at 25 m, 44:1 at 50 m, 52:1 at 75 m, 60:1 at 100 m - and the notes "
+   "called it 'measured CTD/ADCP dilution data'. The file it purported to show had four different "
+   "stations (37:1 at 7 m, 40:1 at 15 m, 42:1 at 25 m, 44:1 at 50 m), so the slide did not even match "
+   "its own source. The deeper problem was that NEITHER was measured: the file itself was synthetic, "
+   "generated to be reproducible by the model without tuning. That file is deleted. The calibration "
+   "data is now the MEASURED Gold Coast dataset (Baum 2019): four operating cases with boundary "
+   "dilutions of 67.7:1, 48.4:1, 22.4:1 and 66.6:1 at the 60 m mixing-zone limit.")
 
 qa("Was the state vector described consistently?",
    "No. The report correctly identifies zeta as the Ornstein-Uhlenbeck stochastic forcing, matching "
@@ -1403,10 +1431,13 @@ qa("Were any solver outputs altered to make the documents agree?",
    "or CSV value was ever edited by hand.")
 
 qa("Does the compliance conclusion survive?",
-   f"Yes, and more comfortably than before. The maximum excess is {EXMAX:.2f} g/kg, inside NSW's ~1 ppt, "
-   f"Perth's 1.2 ppt at 50 m, Gold Coast's ~2 PSU at 60 m and California's binding 2.0 ppt at 100 m. "
-   f"The corrected run predicts a smaller footprint than the original, so the original was "
-   f"conservative.")
+   f"It survives, but it is tighter than earlier revisions reported, for two independent reasons. "
+   f"First, the near-field calibration against measured field data LOWERED the dilution and so RAISED "
+   f"the excess (0.86 -> {EXMAX:.2f} g/kg) and the footprint. Second, the compliance POINT was wrong: "
+   f"EPL 12904 O5.1 applies at the edge of the near-field mixing zone (~26 m), not at 50-100 m. "
+   f"Assessed correctly, the modelled excess there is about 0.71 g/kg against the 1.0 ppt limit — "
+   f"compliant with a 29% margin, where the old assessment implied ~80%. Perth (1.2 ppt @ 50 m), Gold "
+   f"Coast (~2 PSU @ 60 m) and California (2.0 ppt @ 100 m) are met with room to spare.")
 
 # =============================================================================
 section("Appendix - Defects found, and their disposition")

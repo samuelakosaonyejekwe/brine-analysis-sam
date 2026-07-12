@@ -130,11 +130,43 @@ is the central finding of Baum (2019). Sweep: nf_dilution_cal 0.40→1.30 spans 
 so the target is properly bracketed. See `validation/nf_calibration.log`,
 `nereid_output/nf_calibration.json`, `case_study/inputs/gcdp_baum_case*_transect.csv`.
 
-**NOT calibrated — far field.** `farfield_disp_cal` is **unidentifiable** from mixing-zone
-data: a 4× sweep (0.5→2.0) moves the modelled 60 m dilution by <3.5% in every case, because
-that station is near-field-dominated (x_n = 9·Fr·d ≈ 50 m). It stays at its physical default
-of 1.0 — a default, **not a fit**. Needs stations far beyond the mixing zone, i.e. a site
-CTD/ADCP survey at Kurnell.
+**NOT calibrated — far field. This was investigated properly and is not a shortcut.**
+
+`farfield_disp_cal` is **unidentifiable from any data that exists**, for two compounding reasons.
+
+*(i) Where the knob has leverage.* Sweeping it 0.5→2.0 (4×) on the Kurnell configuration moves
+the modelled dilution by:
+
+| station | Δ dilution over a 4× sweep | identifiable? |
+|---------|---------------------------|---------------|
+| 60 m (mixing zone) | **3.5%** (57.7 → 59.3) | no — near-field-dominated (`x_n = 9·Fr·d`) |
+| 150 m (far field)  | **15%** (1185 → 1010) | yes |
+
+So a far-field calibration needs measured stations **beyond ~100 m**. The Gold Coast dataset
+(the only in-class *measured* multi-case dilution data) stops at 60 m — inside the near field.
+
+*(ii) Why no such measurement exists — the signal is below the instrument noise floor.* The WA
+EPA's Perth model-validation report is the most thorough far-field brine study available
+(BMT/Oceanica, *Perth Desalination Plant Discharge Modelling: Model Validation*, App. D of the
+PSDP2 referral documents, epa.wa.gov.au). Its far-field near-bed salinity increases across the
+monitoring rings are **0.0–0.45 units** (A stations 0.05–0.45; B 0.05–0.30; C 0.0–0.30;
+D 0.0–0.30; CT 0.0–0.25) — and those figures are **model-derived** (from *"comparisons between
+simulations with and without the discharge"*, which cannot be measured). The report states of
+them: *"These increase values are close to the accuracy and precision of the most accurate
+salinity measurements undertaken with CTDs"*, noting Seabird's *"dynamic accuracy of their CTD
+probes are at best 0.02 units"*.
+
+**Conclusion.** By the distance at which far-field dispersion controls the plume, the brine
+anomaly has decayed to the CTD noise floor and into natural background variability. There is
+therefore no credible measured dataset — at this site, at an in-class site, or in the wider
+literature accessible here — capable of constraining a far-field dispersion coefficient for a
+deep 60° diffuser. Calibrating it is **not realistic and not typical practice**; the far field
+of such models is characterised, not fitted. `farfield_disp_cal` stays at its physical default
+of **1.0 — a default, not a fit**, and this repo does not describe the far field as calibrated.
+
+This also means the far field does **not** control the regulatory verdict: EPL 12904 condition
+O5.1 sets the compliance point at the edge of the **near-field** mixing zone (≈26 m), which is
+governed by the near-field coefficient — the parameter that *is* calibrated (above).
 
 **Caveats, stated plainly.** (i) The three non-fitted cases are ambient-noise-limited: the
 brine signal at 60 m is ≤0.53 g/kg while the *ambient* background varies by ±2 g/kg, and the
@@ -158,8 +190,21 @@ and is **withdrawn** from all documents.
   natural background, daily max, ≤ 100 m from discharge (SWRCB Res. 2015-0033; 23 CCR §3009).
 - **Perth / Cockburn Sound (WA) [BINDING]** — ≤ 1.2 ppt within 50 m; ≤ 0.8 ppt within 1,000 m.
 - **Gold Coast (QLD) [BINDING]** — ≤ ~2 PSU above background at 60 m.
-- **Sydney (Kurnell, NSW) [BINDING]** — within ~1 ppt of background at the near-field
-  mixing-zone edge (~50–100 m; exact EPL distance *unverified*).
+- **Sydney (Kurnell, NSW) [BINDING] — VERIFIED at source.** Environment Protection Licence
+  **EPL 12904** (NSW EPA), condition **O5.1**, quoted verbatim in the operator's own annual
+  report: *"…at the edge of the near field mixing zone of the discharge plume the salinity of
+  the seawater concentrate is within 1 part per thousand (ppt) of background salinity."*
+  Condition **O5.2**: the dilution requirement does not apply when the concentrate salinity is
+  at or below background.
+  **The condition specifies NO DISTANCE IN METRES.** The compliance point is the edge of the
+  **near-field** mixing zone — which for this discharge is `x_n = 9.0·Fr·d ≈ 26 m`
+  (Roberts et al. 1997), NOT the 50–100 m an earlier revision of this repo assumed. Assuming a
+  distant compliance point flattered the margin badly (ΔS ≈ 0.21 g/kg at 50 m vs ΔS ≈ 0.71 g/kg
+  at 26 m). Source: Veolia, *Sydney Desalination Plant Annual Performance Report (EPL 12904),
+  2024–25*, §5.7 "Salinity Difference – O5.1".
+  Note the operator's report also records an actual exceedance: on 22/07/2025 *"the calculated
+  'Edge of the near field mixing zone of the discharge plume' was greater than 1 ppt … of
+  background salinity."* The limit is not academic.
 - Guidance: **Bleninger & Jirka (2008)** Desalination 221:585–597
   **doi:10.1016/j.desal.2007.02.059 (verified)**; ANZECC (2000)/ANZG (2018) mixing-zone
   framework. The case adopts a more protective sub-lethal contour ΔS = 0.5 g/kg.

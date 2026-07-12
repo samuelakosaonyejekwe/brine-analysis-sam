@@ -54,11 +54,11 @@ python3 case_study/postprocess.py                                      # full ou
 python3 case_study/build_docx.py                                       # build case_study.docx
 ```
 
-The input deck now carries the grid (52×32×26), ensemble (2) and `t_end` (200 s) that actually
-produced `case_study/outputs/`. Note that `metrics_summary.json → footprint_vs_threshold` in the
-committed outputs was written with the solver's default thresholds `[1.0, 1.5, 2.0]` (all zero,
-since the seabed peak excess is 0.84 g/kg); the authoritative threshold table is
-`outputs/isopleth_area_vs_threshold.csv`.
+The input deck carries the grid (52×32×26), ensemble (2), `t_end` (600 s) and the calibrated
+`nf_dilution_cal` (0.871) that actually produced `case_study/outputs/`. Note that
+`metrics_summary.json → footprint_vs_threshold` in the committed outputs was written with the
+solver's default thresholds `[1.0, 1.5, 2.0]` (all zero, since the seabed peak excess is
+0.96 g/kg); the authoritative threshold table is `outputs/isopleth_area_vs_threshold.csv`.
 
 ## Status of the case-study numbers — read before quoting them
 
@@ -75,10 +75,24 @@ and four of its reported quantities are artefacts rather than predictions. This 
   diffuser in crossflow, waves and shear entrains less than a still lab tank. This *lowers* dilution and
   therefore *raises* the predicted footprint: calibrating against reality made the assessment more
   conservative, not less.
-- **Far field: NOT calibrated, and cannot be from this data.** `farfield_disp_cal` is *unidentifiable* —
-  a 4× sweep moves the modelled mixing-zone dilution by <3.5%, because that station is
-  near-field-dominated (`x_n = 9·Fr·d`). It stays at its physical default of 1.0: a default, not a fit.
-  A CTD/ADCP survey at Kurnell is the only route to calibrating it.
+- **Far field: NOT calibrated — and it cannot realistically be calibrated by anyone.** `farfield_disp_cal`
+  is *unidentifiable* where the data is: a 4× sweep moves the modelled dilution by **3.5% at 60 m**
+  (near-field-dominated, `x_n = 9·Fr·d`) but **15% at 150 m** — so a fit needs stations beyond ~100 m.
+  Out there the signal is gone: the WA EPA's Perth validation report gives far-field near-bed salinity
+  increases of 0.0–0.45 units, states they are *model-derived* (simulations with vs without the
+  discharge), and notes they are *"close to the accuracy and precision of the most accurate salinity
+  measurements undertaken with CTDs"* (Seabird accuracy *"at best 0.02 units"*). By the distance at which
+  far-field dispersion controls the plume, the brine anomaly is at the CTD noise floor. The far field of
+  such models is **characterised, not fitted**. It stays at its physical default of 1.0 — a default, not
+  a fit. This does not weaken the compliance verdict, because the licence's compliance point is inside
+  the **near** field (below), which *is* calibrated.
+- **Compliance point corrected — this moved the margin threefold.** The binding condition is
+  **NSW EPL 12904, condition O5.1** (verified verbatim in the operator's annual report): salinity within
+  **1 ppt of background at *the edge of the near-field mixing zone*** — the licence gives **no distance in
+  metres**. That edge is `x_n = 9·Fr·d ≈ 26 m`, not the 50–100 m an earlier revision assumed. Modelled
+  ΔS there is **0.71 g/kg → compliant, 29% margin** (assessing at 50 m gave ~0.2 g/kg and an apparent
+  ~80% margin). The operator's report also records a real O5.1 exceedance on 22/07/2025 — the limit is
+  not academic, and a 29% screening margin is not a consent case.
 - **The model is NOT demonstrably conservative.** Against the four *measured* Gold Coast cases its
   dilution error spans 0.35×–3.4×, with no consistent sign. An earlier revision claimed a uniform
   ~16–25% conservative bias; that rested on the Perth 45:1 @ 50 m figure, which is a **design/compliance
@@ -96,13 +110,18 @@ and four of its reported quantities are artefacts rather than predictions. This 
   rising at `t_end`. It passes the steady-state test only because that test bounds relative scatter
   (`steady_tol = 0.20`), not trend. The domain flush time is ≈2,500 s.
 - **The 2-member ensemble cannot support statistics.** The exceedance field takes only {0, 0.5, 1},
-  and the OU correlation time (600 s) exceeds the run length (200 s).
-- **Inactive physics.** Osmotic flux, osmotic body force, Soret/Dufour, the TEOS-10-style EOS terms,
-  the free surface, bottom drag and the wall function were all **off** in the reported run.
+  and the OU correlation time (600 s) is as long as the run itself (600 s), so the forcing barely
+  decorrelates.
+- **Inactive physics.** Osmotic flux, osmotic body force, Soret/Dufour, the TEOS-10-style EOS terms
+  and the free surface were **off** in the reported run. (Bottom drag and the wall function are now
+  **on** — see the length-scale-limiter fix.)
 
-What survives all of this: the maximum excess salinity is 0.99 g/kg (0.84 g/kg on the seabed), inside
-every applicable regulatory limit with margin, and the seabed footprint of ≈5,127 m² is among the
-least affected quantities because the source-blob error is predominantly vertical.
+What survives all of this: the maximum excess salinity is 0.99 g/kg (0.96 g/kg on the seabed) and the
+seabed footprint is ≈2,859 m² — among the least affected quantities, because the source-blob error is
+predominantly vertical. The discharge is compliant with EPL 12904 O5.1 (ΔS ≈ 0.71 g/kg at the ~26 m
+near-field mixing-zone edge, against a 1 ppt limit), but with a **29% margin, not a comfortable one** —
+and the plume core clears the 1.0 g/kg line by only 0.01 g/kg. Screening-grade: this is a case for
+commissioning a site CTD/ADCP survey, not a consent case.
 
 **Datum warning.** In `outputs/plume_envelope_vs_distance.csv`, `core_depth_*` and `layer_top_depth_*`
 are **depths below the sea surface**, not heights above the seabed. A layer top of 0.48 m means the
