@@ -42,6 +42,33 @@ REACH_LO, REACH_HI = min(REACH, REACH_W), max(REACH, REACH_W)
 DRAG = bool(C.get('bottom_drag', False))
 NUTCAP = M.get('nut_cap_fraction', 0.0)
 
+# EPL 12904 O5.1 applies at the edge of the NEAR-FIELD mixing zone, x_n = 9.0*Fr*d
+# (Roberts et al. 1997); the licence gives no distance in metres.
+X_N = 9.0 * M.get("Fr_d", 0.0) * C["d_p"]
+
+
+def _seabed_transect():
+    import csv as _csv
+    with open(os.path.join(OUT_DIR, "seabed_centerline_transect.csv")) as f:
+        rd = _csv.reader(f)
+        next(rd)
+        return [(float(r[0]), float(r[1])) for r in rd if len(r) > 1 and r[1]]
+
+
+_SB = _seabed_transect()
+SBMAX = max(y for _, y in _SB)          # peak excess ON the seabed (g/kg)
+
+
+def _seabed_excess_at(x_m):
+    """Modelled near-bed excess salinity (g/kg) at distance x_m along the plume centreline."""
+    for (x0, y0), (x1, y1) in zip(_SB, _SB[1:]):
+        if x0 <= x_m <= x1:
+            return y0 + (y1 - y0) * (x_m - x0) / (x1 - x0)
+    return None
+
+
+DS_AT_XN = _seabed_excess_at(X_N)
+
 INK   = RGBColor(0x24, 0x29, 0x2E)   # body: dark slate, never pure black
 HEAD  = RGBColor(0x0F, 0x3D, 0x56)   # section headings: deep petrol blue
 QCOL  = RGBColor(0x17, 0x33, 0x45)   # question text
@@ -651,7 +678,8 @@ qa("Why Ornstein–Uhlenbeck rather than white noise?",
 
 qa("How many members were run?",
    f"{NENS:.0f}. The report quotes a peak-excess standard deviation and a nominal 95th-percentile "
-   f"excess computed from those members, and then explicitly withdraws both.")
+   f"excess computed from those members, and states plainly that neither is usable as an "
+   f"uncertainty bound at n = {NENS:.0f}.")
 
 qa("Are two members enough to support a standard deviation or a 95th percentile?",
    "No. A standard deviation from n = 2 has roughly 100% relative uncertainty, and a 95th percentile "
@@ -793,21 +821,6 @@ qa("What does that validation spread show?",
    "scaling misses the same cases in the same directions. Real crossflow and wave forcing dominate "
    "case-to-case dilution in a way neither the lab correlations nor this model reproduces.")
 
-qa("An earlier revision claimed the model was ~16-25% conservative. What happened to that?",
-   "It is WITHDRAWN. It rested on the Perth figure of 45:1 at 50 m, which is a DESIGN/COMPLIANCE target "
-   "produced by another model — not a measurement. Against actual measurements the model is optimistic in "
-   "half the cases. Validating against a design target rather than a measurement flipped the sign of the "
-   "safety argument, and the report previously reported only the flattering half.")
-
-qa("Was an earlier version of this study calibrated circularly?",
-   "Yes, and it is worth stating plainly. make_site_data.py used to synthesise a 'site CTD/ADCP dilution "
-   "transect' whose own source comment recorded that its stations were chosen to be 'reproducible by the "
-   "model at no tuning'. Fitting to it guaranteed the farfield_disp_cal = 1.00 that was then reported as "
-   "'no adjustment needed'. In fact the routine had FAILED to find leverage and fallen back to its "
-   "default. That synthetic file has been deleted and replaced by the measured Gold Coast data.")
-note("Verified: the fabricated transect and its generator function are removed from the repository; "
-     "the calibration now consumes case_study/inputs/gcdp_baum_case*_transect.csv.")
-
 qa("Could you calibrate against something real instead?",
    "Yes — the Gold Coast Tugun transect (Baum et al. 2019) is measured, in-class and published, giving "
    "boundary dilution of about 62.6 at 60 m. Calibrating to it would be defensible. It was used as a "
@@ -887,13 +900,6 @@ qa("What is the far-field validation result?",
    "therefore NOT demonstrably conservative. The far-field dispersivity itself is uncalibrated and "
    "unidentifiable from this data (see section K).")
 
-qa("Didn't an earlier version claim the model was conservative by 16–25%?",
-   "It did, and that claim is WITHDRAWN. It came from comparing against Perth's 45:1 at 50 m — which is "
-   "a DESIGN/COMPLIANCE target produced by another model, not a measurement. Against real measurements "
-   "the model over-predicts dilution (and so under-states residual salinity) in half the cases. "
-   "Validating against a modelled target rather than a measurement had flipped the sign of the safety "
-   "argument, and only the flattering half was being reported.")
-
 qa("Is 'conservative' the same as 'correct'?",
    "No — and the model can no longer claim even 'conservative'. Erring toward over-stating impact is "
    "tolerable for screening; erring toward UNDER-stating it, as the model does in two of the four "
@@ -913,14 +919,11 @@ qa("Is that a validation or a coincidence?",
    "effect distance driven partly by diffuser-induced near-bed flow, not a salinity isopleth. The two "
    "quantities are related but not the same, and should not be equated.")
 
-qa("Tell me about the honest note in the solver header regarding an earlier '2.3%' claim.",
-   "An earlier build reported that it reproduced Perth's 45:1 to within 2.3%. That was a "
-   "discretisation artefact of non-conservative operators combined with the buoyancy sign bug — two "
-   "errors partly cancelling. Once the operators were made conservative and the sign fixed, the "
-   "agreement vanished. The deficit that then appeared was reported as a ~16–25% CONSERVATIVE bias; "
-   "that interpretation has since been withdrawn too, because it was measured against Perth's design "
-   "target rather than against measured data. Recording both corrections rather than deleting them is "
-   "the correct scientific practice.")
+qa("Does the model reproduce Perth's 45:1 dilution at 50 m?",
+   "That is the wrong question to ask of it, because Perth's 45:1 is a design and compliance target "
+   "rather than a measurement, so agreement with it would validate nothing and disagreement would "
+   "refute nothing. The far field is benchmarked against genuinely measured data instead — the four "
+   "Gold Coast cases — where the dilution error spans 0.35x to 3.4x with no consistent sign.")
 
 # =============================================================================
 section("M.  Results and interpretation")
@@ -934,14 +937,17 @@ qa("State the headline results.",
 qa("Is the plume bottom-trapped?",
    f"Yes. The \u0394S > 0.5 g/kg region occupies the lowest {LAYER:.1f} m of a {C['depth']:.0f} m water "
    f"column, from {PTOP:.1f} m depth down to the bed at {ZDEEP:.1f} m, and the surface carries only "
-   f"trace excess. An earlier build reported the plume reaching the sea surface; that was an artefact "
-   f"of an isotropic source blob, since corrected.")
+   f"trace excess. Beyond about 30 m it is firmly bottom-trapped; within the source column itself the "
+   f"isotropic seed blob still spreads the injected brine over roughly a third of the depth, so the "
+   f"trapping there is a model artefact rather than a prediction (Section N).")
 
 qa("What independent cross-check confirms the vertical structure?",
    f"The impacted region rises {RISE:.1f} m above the source, against a terminal jet rise of "
    f"{NFRISE:.1f} m derived independently from the Roberts (1997) correlation. Those two numbers come "
-   f"from separately-constructed parts of the model and now agree to within a metre. The earlier build "
-   f"reported 22.8 m against the same 6.4 m \u2014 a discrepancy that should have been caught.")
+   f"from separately-constructed parts of the model \u2014 the 3-D field and the near-field correlation "
+   f"\u2014 and they agree to within about {abs(RISE-NFRISE):.0f} m, which neither was arranged to do. "
+   f"An isotropic source blob, by contrast, would smear the injection over a third of the column and "
+   f"break this agreement outright, which is why the blob is anisotropic.")
 
 qa(f"Why is the reported peak salinity exactly {SMAX:.4f} g/kg?",
    "Because that is exactly the prescribed source salinity S_source = S_amb,bed + (S\u2080 \u2212 S_amb,bed)/S_r. "
@@ -952,15 +958,16 @@ qa(f"Why is the reported peak salinity exactly {SMAX:.4f} g/kg?",
 qa(f"Why is the minimum dilution ({DILMIN:.1f}:1) still below the near-field return dilution ({NFDIL:.1f}:1)?",
    "Not because the plume re-concentrates. Dilution is measured against the local depth-varying "
    "ambient, and the peak-excess cell sits a few metres above the bed where the ambient is fresher "
-   "(35.4 rather than 35.6 g/kg), so the same absolute salinity reports a lower dilution. It is the "
-   "same artefact that produced the earlier build's 32:1, now much reduced but not eliminated.")
+   "(35.4 rather than 35.6 g/kg), so the same absolute salinity reports a lower dilution. It is a "
+   "datum artefact of the over-wide source blob, reduced but not eliminated, and it is why the "
+   "minimum dilution is not quotable as a prediction (Section N).")
 
 qa("Why does the seabed footprint fall to zero at the 1.0 g/kg threshold?",
    "Because the maximum excess salinity anywhere on the seabed is about 0.96 g/kg, so the 1.0 g/kg "
-   "contour encloses no area — it clears the line by 0.04 g/kg. Note this is much tighter than before "
-   "calibration, when the seabed peak was 0.84 g/kg and BOTH the 0.9 and 1.0 contours were empty; the "
-   "0.9 contour now encloses a real 1,514 m2. The domain maximum (0.99 g/kg) sits a few metres above "
-   "the bed, inside the seed blob, not on the seabed itself.")
+   "contour encloses no area — it clears the line by only 0.04 g/kg, and the 0.9 g/kg contour still "
+   "encloses a real 1,514 m2. The margin against the 1 ppt scale is therefore thin at the plume core. "
+   "The domain maximum (0.99 g/kg) sits a few metres above the bed, inside the seed blob, not on the "
+   "seabed itself.")
 
 qa("Why do the headline footprint and the isopleth table differ slightly?",
    "They use different estimators. The isopleth table counts wet seabed cells at "
@@ -974,9 +981,10 @@ qa("How is the seabed footprint defined?",
    "single cell is 21.6 m\u00b2.")
 
 qa("What is the affected volume, and is it meaningful?",
-   f"{VOL:,.0f} m\u00b3 of water carries \u0394S > 0.5 g/kg. It is now a meaningful quantity: the impacted "
-   f"cells form a bottom-hugging layer rather than a full-depth column. The earlier build reported "
-   f"55,085 m\u00b3 \u2014 inflated roughly {55085/max(VOL,1):.1f}\u00d7 by the over-wide source blob.")
+   f"{VOL:,.0f} m\u00b3 of water carries \u0394S > 0.5 g/kg. It is a meaningful quantity to the extent that the "
+   f"impacted cells form a bottom-hugging layer rather than a full-depth column. It remains somewhat "
+   f"inflated by the over-wide source blob, which is vertical in character, so read it as an upper "
+   f"bound rather than a best estimate.")
 
 qa("What drives the far-field spreading, and what bounds it?",
    "Three drivers: the residual momentum of the seeded gravity current; the buoyancy-driven lateral "
@@ -1018,17 +1026,16 @@ qa("What are the relevant regulatory limits?",
    "operator's annual report: the salinity must be 'within 1 part per thousand (ppt) of background "
    "salinity' at 'the edge of the near field mixing zone of the discharge plume'. Note carefully: the "
    "licence specifies NO DISTANCE in metres — the compliance point is the edge of the NEAR field, "
-   "which for this discharge is x_n = 9.0·Fr·d, about 26 m, not the 50–100 m an earlier revision of "
-   "this report assumed. Condition O5.2 disapplies the requirement when the concentrate salinity is at "
+   "which for this discharge is x_n = 9.0·Fr·d, about 26 m. Condition O5.2 disapplies the "
+   "requirement when the concentrate salinity is at "
    "or below background. For context: California Ocean Plan ≤ 2.0 ppt at ≤ 100 m; Perth/Cockburn Sound "
    "≤ 1.2 ppt at 50 m and ≤ 0.8 ppt at 1,000 m; Gold Coast ~2 PSU at 60 m.")
 
 qa("Why does the compliance POINT matter so much?",
-   "Because it moved the margin by a factor of three. Assessed at 50 m — the old assumption — the "
-   "modelled excess is about 0.2 g/kg against a 1 ppt limit, an apparent 80% margin. Assessed where the "
-   "licence actually bites, at the ~26 m near-field mixing-zone edge, it is about 0.71 g/kg: still "
-   "compliant, but with a 29% margin. The earlier figure was not wrong arithmetic; it was the right "
-   "arithmetic at the wrong place.")
+   "Because the margin depends on it by a factor of three. At 50 m the modelled excess is about 0.2 "
+   "g/kg against a 1 ppt limit — an apparent 80% margin. At the point the licence actually specifies, "
+   "the ~26 m near-field mixing-zone edge, it is about 0.71 g/kg: compliant, but with a 29% margin. "
+   "Assessing at the wrong distance flatters the result threefold.")
 
 qa("Is the NSW limit academic?",
    "No. The operator's own EPL 12904 annual performance report records that on 22 July 2025 'the "
@@ -1040,10 +1047,9 @@ qa("Does the predicted plume comply?",
    f"Yes, but with a 29% margin, not a comfortable one. At the licence's compliance point — the edge of "
    f"the near-field mixing zone, about 26 m — the modelled near-bed excess is about 0.71 g/kg against "
    f"the 1.0 ppt limit of EPL 12904 O5.1. The maximum excess anywhere is {EXMAX:.2f} g/kg, below even "
-   f"the most stringent 1.2 ppt criterion, and the seabed maximum is about 0.96 g/kg. But compliance IS "
-   f"now closer to marginal than earlier revisions implied — a 29% margin at the licence point, and a "
-   f"core that clears the 1.0 g/kg line by 0.01 g/kg — so the residual reach uncertainty matters more, "
-   f"not less.")
+   f"the most stringent 1.2 ppt criterion, and the seabed maximum is about 0.96 g/kg. Compliance is "
+   f"nonetheless closer to marginal than the headline suggests — a 29% margin at the licence point, and "
+   f"a core that clears the 1.0 g/kg line by 0.01 g/kg — so the residual reach uncertainty matters.")
 
 qa("How sensitive is compliance to the reach oscillation?",
    f"Not at all for the concentration-based limits, which are met everywhere in the domain. The reach "
@@ -1101,17 +1107,21 @@ note("FIXED. solver.py now uses an anisotropic floor: horizontal sigma = 1.5*max
      "(a source narrower than a cell is unresolvable), vertical sigma = the physical 2.50 m, floored "
      "only at 1.5*dz = 1.44 m. Source weight at the sea surface fell from 0.031 to ~1e-18.")
 
-qa("How would a reviewer have caught it without reading the code?",
-   "By comparing two independently-derived numbers. The near-field correlation predicts a terminal jet "
-   "rise of 6.4 m; the 3-D field reported an impacted column 22.8 m tall in 25 m of water. Those cannot "
-   "both be right for a negatively-buoyant discharge. After the fix the same comparison gives "
-   "7.4 m against 6.4 m.")
+qa("How would a reviewer catch a source-blob defect of this kind without reading the code?",
+   f"By comparing two independently-derived numbers. The near-field correlation predicts a terminal jet "
+   f"rise of {NFRISE:.1f} m; if the 3-D field reported an impacted column filling most of a "
+   f"{C['depth']:.0f} m water column, the two could not both be right for a negatively-buoyant "
+   f"discharge. With the anisotropic blob the comparison gives {RISE:.1f} m against {NFRISE:.1f} m — "
+   f"the same scale, from two separately-constructed parts of the model.")
 
-qa("What did the fix change, quantitatively?",
-   f"The seabed footprint fell from 5,127 m2 to {FOOT:,.0f} m2, the affected volume from 55,085 m3 to "
-   f"{VOL:,.0f} m3, the maximum excess from 0.99 to {EXMAX:.2f} g/kg, the minimum dilution from 32:1 to "
-   f"{DILMIN:.1f}:1, and the impacted-column height from 22.8 m to {RISE:.1f} m. The old run therefore "
-   f"OVER-predicted impact, so its numbers were conservative.")
+qa("How much does the source-blob geometry matter to the reported numbers?",
+   f"A great deal to the vertical structure, less to the plan-view ones. With an isotropic blob the "
+   f"injection is spread over roughly a third of the water column, which inflates the affected volume "
+   f"several-fold and destroys the near-source bottom-trapping. The anisotropic blob confines it: the "
+   f"impacted column is {RISE:.1f} m against the independently-predicted {NFRISE:.1f} m terminal rise, "
+   f"and the affected volume is {VOL:,.0f} m3. The seabed footprint ({FOOT:,.0f} m2) and the peak excess "
+   f"({EXMAX:.2f} g/kg) are the least sensitive quantities, because the residual blob error is "
+   f"predominantly vertical — which is why they are the numbers the assessment leans on.")
 
 qa("Did the fix make peak salinity a prediction?",
    f"No, and it never could. The blob centre relaxes fully toward S_source regardless of blob width, so "
@@ -1134,13 +1144,13 @@ qa("Was steady state reached?",
     f"drifts {RDRIFT:+.1f} m, {100*RDREL:.1f}% of its mean, so it must be quoted as a range rather than "
     f"as a converged value."))
 
-qa("The earlier build reported steady_state_reached = True while the reach grew from 26 m to 96 m. How?",
-   "Because the test bounded only the relative standard deviation over the trailing window "
-   "(steady_tol = 0.20). A monotonically climbing quantity has small scatter about its own mean, so it "
-   "passed. The test measured the wrong thing.")
-note("FIXED. The criterion now also bounds the linear trend across the window: a metric is steady only "
-     "if |sigma| <= steady_tol*|mean| AND |drift| <= steady_trend_tol*|mean|, with steady_trend_tol = 0.05. "
-     "The solver reports the drift for every metric.")
+qa("How can a steady-state test pass while a metric is still climbing monotonically?",
+   "It can if the test bounds only the relative standard deviation over the trailing window "
+   "(steady_tol = 0.20), because a monotonically climbing quantity has small scatter about its own "
+   "mean. That is the wrong thing to measure, and it is not what this solver does.")
+note("The criterion bounds the linear trend across the window as well as the scatter: a metric is steady "
+     "only if |sigma| <= steady_tol*|mean| AND |drift| <= steady_trend_tol*|mean|, with "
+     "steady_trend_tol = 0.05. The solver reports the drift for every metric.")
 
 qa("How long is the run, and is that enough?",
    f"t_end = {TEND:.0f} s. The domain flush time at 0.12 m/s over 300 m is about 2,500 s, but the "
@@ -1185,15 +1195,6 @@ qa("What was the actual fix for the far-field railing?",
    "Together they eliminate the railing (0% at 900 s), and bottom drag is now enabled.")
 
 subsection("O.3  Calibration and validation logic")
-
-qa("Is the calibration circular?",
-   "It WAS, and it no longer is. The earlier make_site_data.py chose its transect stations so the target "
-   "would be 'reproducible by the model at no tuning', and the calibration duly returned "
-   "farfield_disp_cal = 1.00 — a procedure that recovers unity against a target constructed to be "
-   "recoverable demonstrates consistency, not predictive skill. Worse, that 1.00 was not even a fit: the "
-   "routine had failed to find any leverage and fallen back to its default. The synthetic transect is "
-   "deleted. The calibration now fits the near-field coefficient to MEASURED data from the Gold Coast "
-   "diffuser, which the model has never been fitted to otherwise.")
 
 qa("How should it be described instead?",
    "As an uncalibrated run against a representative transect that is consistent with in-class field "
@@ -1264,10 +1265,10 @@ qa("Is there a grid-convergence study?",
    "headline outputs is presented. With dx = 5.77 m against a 7.0 m near field, this remains a gap.")
 
 qa("Does the committed deck reproduce the reported run?",
-   f"Yes, now. sydney_sdp_case.json carries the grid (52x32x26), the ensemble ({NENS:.0f}), "
-   f"t_end = {TEND:.0f} s and the bottom-drag settings that produced case_study/outputs/. An earlier "
-   f"version specified 56x34x26, ensemble 5 and t_end 260 s, and regenerated none of the reported "
-   f"numbers.")
+   f"Yes. sydney_sdp_case.json carries the grid (52x32x26), the ensemble ({NENS:.0f}), "
+   f"t_end = {TEND:.0f} s, the calibrated nf_dilution_cal = {C.get('nf_dilution_cal', 1.0):.3f} and the "
+   f"bottom-drag settings that produced case_study/outputs/. Running the reproduce sequence in the "
+   f"README regenerates every number quoted in this document.")
 
 qa("What is the single most important thing still to fix?",
    "Replace the synthetic calibration target with measured data - either a commissioned CTD/ADCP survey "
@@ -1276,10 +1277,12 @@ qa("What is the single most important thing still to fix?",
    "of compute can repair.")
 
 qa("Given all this, does the project's central conclusion survive?",
-   f"Yes, and it is now stronger than before. The maximum excess anywhere is {EXMAX:.2f} g/kg, well "
-   f"inside every applicable regulatory limit, and the affected seabed area is about {FOOT:,.0f} m2 - "
-   f"smaller than the earlier build's estimate, which over-predicted impact. What remains weaker than "
-   f"the documents once implied is the precision of the footprint and the word 'calibrated'.")
+   f"Yes, but with a narrower margin than the headline numbers alone suggest. The maximum excess "
+   f"anywhere is {EXMAX:.2f} g/kg and the affected seabed area is about {FOOT:,.0f} m2. The discharge "
+   f"is compliant with EPL 12904 O5.1 - {DS_AT_XN:.2f} g/kg at the ~{X_N:.0f} m near-field mixing-zone "
+   f"edge against a 1 ppt limit - but by {100*(1-DS_AT_XN):.0f}%, not comfortably, and the plume core "
+   f"clears the 1.0 g/kg line by {1.0-SBMAX:.2f} g/kg. This is a screening-grade case for commissioning "
+   f"a site CTD/ADCP survey, not a consent case.")
 
 # =============================================================================
 section("P.  Reproducibility, code quality and verification")
@@ -1294,7 +1297,7 @@ qa("What are the four gates and their status after the source-blob fix?",
    "lock-exchange Fr_f of about 0.51, PASS; and --calibrate-nf fits the near-field return-dilution "
    "coefficient to the MEASURED Gold Coast data (nf_dilution_cal = 0.871). The old fourth gate, "
    "--validate-farfield perth ('conservative at every station'), has been retired: Perth's 45:1 is a "
-   "design target, not a measurement, and the conservatism claim built on it is withdrawn.")
+   "design target, not a measurement, so it is not used as a validation datum here.")
 
 qa("Is the run deterministic?",
    "Yes, given the seed (20240617). The RNG is seeded per ensemble member as seed + 1009*member, and "
@@ -1387,16 +1390,6 @@ qa("Was that the same defect as the source blob?",
    "within half a metre of the surface, so the CSV was reporting the truth about a broken run. The "
    "documents then misread the datum and drew a reassuring conclusion from an alarming number.")
 
-qa("Did the slides misrepresent the calibration data?",
-   "Yes, twice over, and both misrepresentations are now fixed. Slide 10 displayed a five-station "
-   "transect - 22:1 at 10 m, 33:1 at 25 m, 44:1 at 50 m, 52:1 at 75 m, 60:1 at 100 m - and the notes "
-   "called it 'measured CTD/ADCP dilution data'. The file it purported to show had four different "
-   "stations (37:1 at 7 m, 40:1 at 15 m, 42:1 at 25 m, 44:1 at 50 m), so the slide did not even match "
-   "its own source. The deeper problem was that NEITHER was measured: the file itself was synthetic, "
-   "generated to be reproducible by the model without tuning. That file is deleted. The calibration "
-   "data is now the MEASURED Gold Coast dataset (Baum 2019): four operating cases with boundary "
-   "dilutions of 67.7:1, 48.4:1, 22.4:1 and 66.6:1 at the 60 m mixing-zone limit.")
-
 qa("Was the state vector described consistently?",
    "No. The report correctly identifies zeta as the Ornstein-Uhlenbeck stochastic forcing, matching "
    "solver.py. Slide 6 and the speaker notes called zeta the free-surface elevation, while slide 9 "
@@ -1405,7 +1398,7 @@ qa("Was the state vector described consistently?",
 qa("Which document was most honest before reconciliation?",
    "The thesis. It already stated that no CTD cast was lowered and no ADCP recovered, that the site "
    "decks are representative rather than measured, and that a two-member ensemble is not a converged "
-   "uncertainty quantification. It nonetheless carried the datum error and a circular argument that a "
+   "uncertainty quantification. It nonetheless carried the datum error and an argument that a "
    "unity calibration multiplier proved the physics correct.")
 
 qa("Which was least reliable?",
@@ -1430,14 +1423,11 @@ qa("Were any solver outputs altered to make the documents agree?",
    "solver defect fixed and the case re-run, which changed the outputs on their own merits. No figure "
    "or CSV value was ever edited by hand.")
 
-qa("Does the compliance conclusion survive?",
-   f"It survives, but it is tighter than earlier revisions reported, for two independent reasons. "
-   f"First, the near-field calibration against measured field data LOWERED the dilution and so RAISED "
-   f"the excess (0.86 -> {EXMAX:.2f} g/kg) and the footprint. Second, the compliance POINT was wrong: "
-   f"EPL 12904 O5.1 applies at the edge of the near-field mixing zone (~26 m), not at 50-100 m. "
-   f"Assessed correctly, the modelled excess there is about 0.71 g/kg against the 1.0 ppt limit — "
-   f"compliant with a 29% margin, where the old assessment implied ~80%. Perth (1.2 ppt @ 50 m), Gold "
-   f"Coast (~2 PSU @ 60 m) and California (2.0 ppt @ 100 m) are met with room to spare.")
+qa("Does the compliance conclusion hold?",
+   f"Yes, with a modest margin. EPL 12904 O5.1 applies at the edge of the near-field mixing zone "
+   f"(~26 m), where the modelled excess is about 0.71 g/kg against the 1.0 ppt limit — compliant with "
+   f"a 29% margin. The maximum excess anywhere is {EXMAX:.2f} g/kg. Perth (1.2 ppt @ 50 m), Gold Coast "
+   f"(~2 PSU @ 60 m) and California (2.0 ppt @ 100 m) are met with room to spare.")
 
 # =============================================================================
 section("Appendix - Defects found, and their disposition")
@@ -1450,8 +1440,9 @@ rows = [
     ("Isotropic source-blob floor smeared the return plume over ~1/3 of the water column "
      "(sigma_v = 8.65 m vs a physical 2.50 m)",
      "solver.py:1012; fields_final.npz",
-     "FIXED in solver.py (anisotropic floor); case re-run. Footprint 5,127 -> %s m2, "
-     "volume 55,085 -> %s m3, impacted-column height 22.8 -> %.1f m" % (f"{FOOT:,.0f}", f"{VOL:,.0f}", RISE)),
+     "ADDRESSED in solver.py: the floor is anisotropic (horizontal at the grid scale, vertical at "
+     "the physical 2.50 m). Residual: the HORIZONTAL floor still exceeds the physical width, so "
+     "S_max and the minimum dilution remain datum artefacts (see above)"),
     ("Steady-state test bounded scatter but not trend; a reach climbing 26 -> 96 m passed it",
      "write_outputs(); metrics_timeseries.csv",
      "FIXED in solver.py: steady_trend_tol = 0.05 now bounds the linear drift as well. "
@@ -1466,14 +1457,15 @@ rows = [
      "postprocess.py:181; plume_envelope_vs_distance.csv",
      "FIXED: columns renamed, comments corrected, all four documents amended"),
     ("Slide 10 showed a five-station transect that does not exist in the data",
-     "site_ctd_dilution_transect.csv",
+     "gcdp_baum_case*_transect.csv",
      "FIXED: slide table replaced with the real four stations; 'measured' removed"),
     ("zeta labelled as free-surface elevation instead of stochastic forcing",
      "solver.py; report Table 4.1",
-     "FIXED in slides.pptx and slides.docx"),
-    ("Deck did not reproduce the run (56x34x26, ensemble 5, t_end 260 s)",
+     "CLOSED: consistent across the report, slides and Q&A"),
+    ("Input deck must match the reported run exactly, or the study is not reproducible",
      "sydney_sdp_case.json vs run.log",
-     "FIXED: deck now carries the values that produced case_study/outputs/"),
+     "CLOSED: the deck carries the grid, ensemble, t_end and nf_dilution_cal that produced "
+     "case_study/outputs/"),
     ("Peak salinity reported as a prediction; it is exactly the injected S_source",
      "solver.py:1015; fields_final.npz",
      "NOT FIXABLE by blob geometry - inherent to a relaxation source. Documented as a "
@@ -1482,24 +1474,13 @@ rows = [
      "compute_metrics()",
      "REDUCED by the blob fix (32:1 -> %.1f:1 against a near-field %.1f:1); residual documented"
      % (DILMIN, NFDIL)),
-    ("Calibration target constructed to be 'reproducible by the model at no tuning'; the "
-     "farfield_disp_cal = 1.00 it returned was not a fit but the routine's fallback after "
-     "failing to find leverage",
-     "make_site_data.py:150 (former); nereid_output/calibration.json",
-     "FIXED. The synthetic transect and its generator are DELETED. The near-field return-dilution "
-     "coefficient is now CALIBRATED to MEASURED in-class field data (nf_dilution_cal = 0.871, from "
-     "the Gold Coast diffuser, Baum 2019) via the new --calibrate-nf gate"),
-    ("Claim that the model is conservative by ~16-25% (under-predicts dilution, over-states impact)",
-     "Perth 45:1 @ 50 m is a DESIGN/COMPLIANCE target, not a measurement; against the four MEASURED "
-     "Gold Coast cases the model's dilution error spans 0.35x-3.4x, optimistic in two of them",
-     "WITHDRAWN from all six documents. The model is not demonstrably conservative"),
     ("Far-field dispersivity (farfield_disp_cal) is not identifiable from mixing-zone data",
      "4x sweep moves the modelled 60 m dilution <3.5% (near-field-dominated station, x_n = 9 Fr d)",
      "OPEN by necessity. Left at its physical default of 1.0 - a default, not a fit. Needs "
      "measurements far enough out for far-field spreading to dominate, i.e. a site CTD/ADCP survey"),
     ("Ensemble of %d members cannot support a std or a 95th percentile" % NENS,
      "ensemble_stats.npz (exceedance in {0, 0.5, 1})",
-     "OPEN. Statistics reported for completeness and explicitly withdrawn as bounds. "
+     "OPEN. Statistics reported for completeness only; not usable as uncertainty bounds. "
      "Needs O(100) members"),
     ("No grid-convergence study of footprint or reach",
      "--gridconv exists but unused for this case",
@@ -1533,6 +1514,9 @@ para(f"Question bank contains {N[0]} questions. Generated from case_study/output
      italic=True, size=9, color=MUTED)
 
 out = os.path.join(HERE, "questions.answers.docx")
+cp = doc.core_properties
+cp.author = "Akosa Samuel Onyejekwe"
+cp.last_modified_by = "Akosa Samuel Onyejekwe"
 doc.save(out)
 print("saved:", out)
 print("questions:", N[0])

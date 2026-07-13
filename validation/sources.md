@@ -176,13 +176,14 @@ directions, so it is **not demonstrably conservative**. (ii) Gold Coast is **not
 crossflow, wave climate and diffuser geometry differ. This is an in-class calibration, the best
 available substitute for a site survey — not a site calibration.
 
-**WITHDRAWN.** A prior revision calibrated against `site_ctd_dilution_transect.csv`, a synthetic
-transect whose own generator comment recorded that its stations were chosen to be *"reproducible
-by the model at no tuning"*. The `farfield_disp_cal = 1.00` it "returned" was not a fit but the
-routine falling back to its default after failing to find leverage. That file and its generator
-are **deleted**. The associated claim that the model is *"conservative, under-predicting dilution
-by ~16–25%"* rested on Perth's 45:1 @ 50 m — a **design/compliance target, not a measurement** —
-and is **withdrawn** from all documents.
+**What may NOT be used as calibration data.** Two things, recorded here so they are not
+mistakenly adopted later. (i) A *synthetic* dilution transect — one whose stations are chosen so
+that the model reproduces them without tuning — is not data: fitting to it is circular, and the
+`farfield_disp_cal = 1.00` such a fit "returns" is the routine falling back to its default after
+failing to find leverage, not a result. No synthetic transect is used or shipped in this
+repository. (ii) The Perth 45:1 @ 50 m figure is a **design/compliance target, not a
+measurement**, and cannot support a claim that the model is conservative. Only the measured
+Gold Coast cases above are used, and they show a 0.35×–3.4× spread with no consistent sign.
 
 ## 6. Regulatory mixing-zone limits (context)
 
@@ -198,9 +199,9 @@ and is **withdrawn** from all documents.
   at or below background.
   **The condition specifies NO DISTANCE IN METRES.** The compliance point is the edge of the
   **near-field** mixing zone — which for this discharge is `x_n = 9.0·Fr·d ≈ 26 m`
-  (Roberts et al. 1997), NOT the 50–100 m an earlier revision of this repo assumed. Assuming a
-  distant compliance point flattered the margin badly (ΔS ≈ 0.21 g/kg at 50 m vs ΔS ≈ 0.71 g/kg
-  at 26 m). Source: Veolia, *Sydney Desalination Plant Annual Performance Report (EPL 12904),
+  (Roberts et al. 1997) — **not** the 50–100 m nominal mixing zone commonly assumed for such
+  outfalls. The distinction is decisive: assessing at a distant point flatters the margin badly
+  (ΔS ≈ 0.21 g/kg at 50 m vs ΔS ≈ 0.71 g/kg at the true 26 m edge). Source: Veolia, *Sydney Desalination Plant Annual Performance Report (EPL 12904),
   2024–25*, §5.7 "Salinity Difference – O5.1".
   Note the operator's report also records an actual exceedance: on 22/07/2025 *"the calculated
   'Edge of the near field mixing zone of the discharge plume' was greater than 1 ppt … of

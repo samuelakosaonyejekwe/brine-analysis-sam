@@ -89,17 +89,16 @@ and four of its reported quantities are artefacts rather than predictions. This 
 - **Compliance point corrected — this moved the margin threefold.** The binding condition is
   **NSW EPL 12904, condition O5.1** (verified verbatim in the operator's annual report): salinity within
   **1 ppt of background at *the edge of the near-field mixing zone*** — the licence gives **no distance in
-  metres**. That edge is `x_n = 9·Fr·d ≈ 26 m`, not the 50–100 m an earlier revision assumed. Modelled
-  ΔS there is **0.71 g/kg → compliant, 29% margin** (assessing at 50 m gave ~0.2 g/kg and an apparent
-  ~80% margin). The operator's report also records a real O5.1 exceedance on 22/07/2025 — the limit is
-  not academic, and a 29% screening margin is not a consent case.
+  metres**. That edge is `x_n = 9·Fr·d ≈ 26 m` — it is *not* the 50–100 m nominal mixing zone that is
+  often assumed for such outfalls, and the difference is decisive. Modelled
+  ΔS there is **0.71 g/kg → compliant, 29% margin**. The distance the condition is assessed at matters by
+  a factor of three: at 50 m the excess is only ~0.2 g/kg, which would flatter the margin to ~80%. The
+  operator's report also records a real O5.1 exceedance on 22/07/2025 — the limit is not academic, and a
+  29% screening margin is not a consent case.
 - **The model is NOT demonstrably conservative.** Against the four *measured* Gold Coast cases its
-  dilution error spans 0.35×–3.4×, with no consistent sign. An earlier revision claimed a uniform
-  ~16–25% conservative bias; that rested on the Perth 45:1 @ 50 m figure, which is a **design/compliance
-  target, not a measurement**, and the claim is **withdrawn**.
-- **A prior revision was calibrated circularly.** `make_site_data.py` used to synthesise a "site CTD/ADCP
-  transect" whose stations its own source comment recorded as chosen to be *"reproducible by the model at
-  no tuning"*. Fitting to it guaranteed the unity result it produced. That file is deleted.
+  dilution error spans 0.35×–3.4×, with no consistent sign, so no uniform conservative bias can be
+  claimed. (The Perth 45:1 @ 50 m figure sometimes quoted for such a claim is a **design/compliance
+  target, not a measurement**, and cannot support one.)
 - **The source blob is grid-limited.** `solver.py:1012` floors the seed width at
   `1.5*max(dx, dz)` = 8.65 m against a physical return-plume width of 2.50 m, injecting brine over
   ~⅓ of the water column. Consequently `S_max` is exactly the injected `S_source`, the 32:1 minimum

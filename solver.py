@@ -81,44 +81,47 @@ VALIDATION STATUS & LIMITATIONS (read before any quantitative use):
     divergence controlled, EOS monotone, TVD monotone, checkpoint/restart
     bitwise-exact).
   * NEAR-FIELD ACCURACY fixed by coupling: the unresolvable sub-grid nozzle is
-    handled by validated empirical correlations (nearfield_jet) and the 3-D
-    model is seeded with the DILUTED return plume (CORMIX/VISJET-class
-    approach). --validate now reproduces the published 60-degree dense-jet
-    scaling z_t/(D Fr) = 2.1-2.8 and return dilution S_r = 1.6 Fr. Set
+    handled by empirical correlations (nearfield_jet) and the 3-D model is seeded
+    with the DILUTED return plume (CORMIX/VISJET-class approach). --validate
+    reproduces the published 60-degree dense-jet scaling z_t/(D Fr) = 2.1-2.8 and
+    the quiescent-lab return dilution S_r = 1.6 Fr (Roberts et al. 1997). Set
     cfg.near_field_coupling=False for the raw (over-predicting) resolved-jet
     mode used in jet-resolution studies.
-  * FAR-FIELD ACCURACY (the 3-D gravity-current spreading) is NOT field-validated,
-    but a ROOT-CAUSE BUG was found and fixed. The k-eps buoyancy production term
-    G_b had a FLIPPED SIGN (buoyancy_damping_fix), so stable brine stratification
-    PRODUCED turbulence instead of damping it -> the eddy viscosity railed to
-    nut_max wherever the water was stratified -> the far field grossly OVER-mixed.
-    With the corrected damping sign AND a REALIZABLE k-eps limiter (realizable_keps,
-    Durbin 1996 — bounds the turbulent time scale so nut cannot over-produce/rail):
-       - eddy-viscosity railing eliminated: nut_cap_fraction ~17%/81% (coarse/fine
-         grid) -> ~5%/0% (grid-independent, physical turbulence);
-       - Perth submerged diffuser: model ~35:1 dilution @50 m vs documented 45:1 ->
-         UNDER-predicts dilution (~22%) = CONSERVATIVE (OVER-predicts impact = the
-         SAFE side), vs the buggy sign's ~57:1 (unsafe). Field 45:1 sits between.
-       - MULTI-POINT far-field validation (--validate-farfield) vs the published
-         Perth transect (return ~28:1, 25.4 m ~34:1, 50 m 45:1): the model is
-         CONSERVATIVE (under-predicts dilution) at every far-field station.
-       - lock-exchange PDE-core benchmark Fr_f ~0.47 (near textbook Benjamin ~0.5).
+  * NEAR-FIELD CALIBRATION against MEASURED FIELD DATA (--calibrate-nf): the
+    return-dilution coefficient is fitted to the measured 48.4:1 dilution at the
+    60 m mixing-zone boundary of the Gold Coast Desalination Plant multiport
+    diffuser at full capacity (Baum 2019, Tables 2.2-2.3; peer-reviewed as Baum
+    et al. 2018, J. Hydraul. Eng. 144(11)). Fitted nf_dilution_cal = 0.871, i.e.
+    a FIELD S_r = 1.39 Fr, 13% below the quiescent-LAB 1.6 Fr — a real diffuser in
+    crossflow, waves and shear entrains less than a still tank. This LOWERS
+    predicted dilution and RAISES the predicted footprint.
+  * FAR-FIELD ACCURACY (the 3-D gravity-current spreading) is NOT calibrated, and
+    cannot be from mixing-zone data: farfield_disp_cal is UNIDENTIFIABLE there (a
+    4x sweep moves the modelled dilution <3.5% at 60 m, because that station is
+    near-field-dominated at x_n = 9 Fr d; leverage reaches only ~15% by 150 m).
+    It is left at its physical default of 1.0 — a default, not a fit. A ROOT-CAUSE
+    BUG was however found and fixed: the k-eps buoyancy production term G_b had a
+    FLIPPED SIGN (buoyancy_damping_fix), so stable brine stratification PRODUCED
+    turbulence instead of damping it -> the eddy viscosity railed to nut_max
+    wherever the water was stratified -> the far field grossly OVER-mixed. With the
+    corrected damping sign AND a REALIZABLE k-eps limiter (realizable_keps, Durbin
+    1996 — bounds the turbulent time scale so nut cannot over-produce/rail),
+    eddy-viscosity railing is eliminated: nut_cap_fraction ~17%/81% (coarse/fine
+    grid) -> ~5%/0% (grid-independent, physical turbulence).
+       - lock-exchange PDE-core benchmark: Fr_f ~0.51 against the Benjamin (1968)
+         half-depth front condition of exactly 0.500 (2% fast).
+       - The model is NOT demonstrably conservative: against the four MEASURED Gold
+         Coast cases the far-field dilution error spans 0.35x-3.4x with no
+         consistent sign. Treat absolute far-field numbers as INDICATIVE. The Perth
+         45:1 @ 50 m figure often quoted for such outfalls is a DESIGN/COMPLIANCE
+         target, not a measurement, and cannot validate anything.
     APPLICABILITY ENVELOPE: NEREID-B is designed and validated for DEEP / SUBMERGED
     multiport brine DIFFUSERS (the dominant modern desalination outfall class — Perth,
     Gold Coast, Sydney, Carlsbad, Sorek). Shallow (~5-6 m) surface/shoreline discharges are
     OUTSIDE the design envelope (a deep-diffuser near-field/gravity-current model is not the
-    right tool there) and are not a target regime.
-    HONEST NOTES:
-     (1) An earlier build reported "reproduces 45:1 to 2.3%" — a DISCRETISATION
-         ARTIFACT of the old non-conservative operators COMBINED with the sign-bug
-         over-mixing (two errors partly cancelling); it vanishes once the PDE is
-         solved accurately and the sign is corrected.
-     (2) The corrected far field is physically consistent and CONSERVATIVE; the
-         residual ~22% (35 vs 45) is honest model uncertainty. The model is validated
-         to be conservative across the only public in-class multi-point transect; a
-         dedicated CTD/ADCP survey at the modelled outfall would tighten the absolute
-         numbers. No coefficient is hand-tuned to one site. Treat absolute far-field
-         numbers as INDICATIVE (now conservative/safe).
+    right tool there) and are not a target regime. A dedicated CTD/ADCP survey at the
+    modelled outfall, with stations well beyond the mixing zone, is the only route to a
+    site-specific calibration of the far field.
   * Documented reduced-CFD choices (intentional, toggleable/extensible):
     Boussinesq continuity (full nonlinear density kept in buoyancy);
     1st-order-in-time ADVECTION (diagonal diffusion now backward-Euler implicit);
@@ -5361,11 +5364,9 @@ def main(argv=None):
         log.info(f"NOTE (resolution): dz={cfg.dz:.2f} m — the ~1-2 m near-bed gravity "
                  f"current is UNDER-RESOLVED. Default outputs are qualitative; use "
                  f"--hires (64x40x28) or finer for quantitative far-field numbers.")
-    # E3: far-field validation scope (HONEST). Near-field = lab-validated. The
-    # far field is NOT field-validated: solved accurately (default numerics) the
-    # model over-disperses (~57:1 vs field 45:1 at Perth; Gacia reach ~2x). The
-    # earlier "45:1 to 2.3%" was a discretisation artifact. Far-field numbers are
-    # indicative and currently OPTIMISTIC (under-predict impact).
+    # E3: validation/calibration scope. Near-field = lab-validated AND field-calibrated
+    # (nf_dilution_cal, Gold Coast). Far field = uncalibrated by necessity (the knob is
+    # unidentifiable from mixing-zone data) and its absolute numbers are indicative only.
     log.info("NOTE (validation/calibration status): near-field = empirical inclined-dense-jet "
              "correlations, with the return-dilution coefficient CALIBRATED to MEASURED field "
              "data (nf_dilution_cal; Gold Coast diffuser, Baum 2019 -> field S_r = 1.39*Fr vs "
@@ -5375,10 +5376,10 @@ def main(argv=None):
              "moves the modelled dilution <3.5%, because that station is near-field-dominated) "
              "and is left at its physical default of 1.0. The model is NOT demonstrably "
              "conservative: against the four MEASURED Gold Coast cases its dilution error spans "
-             "0.35x-3.4x. (An earlier revision claimed a uniform ~16-25% conservative bias from "
-             "the Perth 45:1 @ 50 m figure; that is a DESIGN/COMPLIANCE target, not a "
-             "measurement, and the claim is WITHDRAWN.) Screening-grade: a CTD/ADCP survey at "
-             "the modelled outfall remains the only route to a site calibration.")
+             "0.35x-3.4x, with no consistent sign. (The Perth 45:1 @ 50 m figure cannot be used "
+             "to argue otherwise: it is a DESIGN/COMPLIANCE target, not a measurement.) "
+             "Screening-grade: a CTD/ADCP survey at the modelled outfall remains the only route "
+             "to a site calibration.")
     nf = grid.nearfield
     if cfg.near_field_coupling:
         log.info(f"near-field (validated correlations): Fr={nf['Fr']:.1f}  "

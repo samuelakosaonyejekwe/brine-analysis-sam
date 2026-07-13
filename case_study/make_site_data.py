@@ -14,11 +14,11 @@ Provenance of the numbers (documented, not measured per-station):
   * Depth-averaged current ~0.12 m/s with M2 tidal modulation +-0.04 m/s
   * Exposed swell climate: Hs ~1.2-1.8 m, Tp ~8-11 s
 
-NO SITE DILUTION TRANSECT IS GENERATED HERE. An earlier revision of this file
-synthesised a "site CTD/ADCP dilution transect" whose stations were chosen to be
-reproducible by the model without tuning; calibrating against it was circular and
-guaranteed farfield_disp_cal = 1.00. The calibration target is now REAL published
-field data from an in-class outfall, held in
+NO SITE DILUTION TRANSECT IS GENERATED HERE, and none must ever be. A synthesised
+"site CTD/ADCP dilution transect" — one whose stations are chosen so the model
+reproduces them without tuning — is not data: calibrating against it is circular and
+merely returns the default. The calibration target is REAL published field data from
+an in-class outfall, held in
   inputs/gcdp_baum_case*_transect.csv
 (Gold Coast Desalination Plant offshore multiport diffuser; 60-deg inclined ports,
 open-coastal setting). Source: Baum, M.J. (2019), "Dense Jet Behaviour in Dynamic

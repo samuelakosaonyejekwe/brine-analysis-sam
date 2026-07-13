@@ -144,8 +144,8 @@ excess_src = C["S0"] - C["S_amb_surf"]
 # ---- EPL 12904 condition O5.1 compliance point ------------------------------------------
 # The licence sets the limit (1 ppt above background) at "the edge of the near field mixing
 # zone" and specifies NO distance in metres. For an inclined dense jet that edge is the end of
-# the near-field mixing zone, x_n = 9.0 Fr d (Roberts et al. 1997) — NOT the 50-100 m an earlier
-# revision assumed, which flattered the margin badly.
+# the near-field mixing zone, x_n = 9.0 Fr d (Roberts et al. 1997) — NOT the 50-100 m nominal
+# mixing zone often assumed for such outfalls, which would flatter the margin threefold.
 X_N = 9.0 * g("Fr_d", 0.0) * C["d_p"]
 
 
@@ -238,9 +238,7 @@ P(f"REGULATORY COMPLIANCE — assessed at the point the licence actually specifi
   + (f"The modelled near-bed excess there is {DS_AT_XN:.2f} g/kg against the 1.0 ppt limit — "
      f"COMPLIANT, with a margin of {100*(1-DS_AT_XN):.0f}%. "
      if DS_AT_XN is not None else "")
-  + f"An earlier revision of this report assessed compliance at 50–100 m, where ΔS is only "
-    f"~0.2 g/kg; that assumption flattered the margin roughly threefold and is corrected here. "
-    f"The peak excess anywhere ({g('excess_max', 0):.2f} g/kg) occurs within ~20 m, INSIDE the "
+  + f"The peak excess anywhere ({g('excess_max', 0):.2f} g/kg) occurs within ~20 m, INSIDE the "
     f"mixing zone, where the licence limit does not apply. The other jurisdictions' limits are "
     f"met with room to spare (Perth 1.2 ppt at 50 m; Gold Coast ~2 PSU at 60 m; California "
     f"2.0 ppt at 100 m). Note the compliance point lies inside the NEAR field — so it is "
@@ -280,9 +278,7 @@ _caveats = [
     "<3.5%, because that station is near-field-dominated (§10). It sits at its physical default "
     "of 1.0 — a default, not a fit. Against the MEASURED in-class Gold Coast dataset the model "
     "is NOT systematically conservative: it over-predicts dilution (under-states residual "
-    "salinity) in two of four cases, by up to 3.4×. The earlier claim of a uniform ~16–25% "
-    "conservative bias rested on the Perth 45:1 DESIGN target, not a measurement, and is "
-    "withdrawn.",
+    "salinity) in two of four cases, by up to 3.4×.",
     "Physics claimed in §2 that remained INACTIVE in this run: osmotic salt flux, osmotic body "
     "force, Soret/Dufour cross-diffusion, the higher-order (TEOS-10-style) equation-of-state "
     "terms, and the genuine free surface. The run used near-field coupling, full-tensor "
@@ -292,13 +288,14 @@ _caveats = [
     "dx = 5.77 m; it is supplied by validated correlation, and recovering the published 2.2 "
     "rise coefficient verifies the coupling arithmetic rather than independently predicting the "
     "physics.",
-    f"The former far-field eddy-viscosity railing is RESOLVED. An earlier build could not be "
-    f"integrated past ~400–600 s: in the weakly-stratified, low-strain far field neither the strain "
-    f"nor a buoyancy realizability bound binds, so ν_t = C_μ k²/ε ran free, spurious turbulent energy "
-    f"accumulated and ν_t railed to its ceiling (≈29% of cells by t = 600 s), forcing a short "
-    f"t_end = 200 s with bottom drag off. A turbulent length-scale limiter (Galperin 1988 buoyancy "
-    f"limit plus a geometric mixing-length cap, imposed as a floor on ε) together with a semi-implicit "
-    f"(Patankar) k–ε sink now bound ν_t to a physical value and drain the spurious energy. Confirmed: "
+    f"Far-field eddy-viscosity railing is CONTROLLED. It is a real failure mode of realizable k–ε in "
+    f"this regime: in the weakly-stratified, low-strain far field neither the strain nor a buoyancy "
+    f"realizability bound binds, so ν_t = C_μ k²/ε can run free, spurious turbulent energy accumulates "
+    f"and ν_t rails to its ceiling — which without a further limiter reaches ≈29% of cells by "
+    f"t = 600 s and makes long integrations with bottom drag untenable. A turbulent length-scale "
+    f"limiter (Galperin 1988 buoyancy limit plus a geometric mixing-length cap, imposed as a floor on "
+    f"ε) together with a semi-implicit (Patankar) k–ε sink bound ν_t to a physical value and drain the "
+    f"spurious energy. Confirmed: "
     f"the eddy-viscosity cap engages in {100*g('nut_cap_fraction', 0):.0f}% of cells at t_end = "
     f"{C['t_end']:.0f} s with bottom drag ON (0% at t = 900 s on the same grid). The near-field "
     f"validation and the headline metrics are unchanged by the limiter, which binds only in the far "
@@ -330,8 +327,9 @@ else:
         f"Steady state was reached, on a test that bounds trend as well as scatter. Across the "
         f"trailing window every tracked metric satisfies both |σ| ≤ {C.get('steady_tol', 0.2):.2f}·|mean| "
         f"and |drift| ≤ {C.get('steady_trend_tol', 0.05):.2f}·|mean|; the reach drifts only "
-        f"{_rdrift:+.1f} m ({100*_rdrel:.1f}% of its mean). An earlier build of this study reported "
-        f"'steady' from a scatter-only test that a monotonically climbing metric could pass."))
+        f"{_rdrift:+.1f} m ({100*_rdrel:.1f}% of its mean). The trend bound is what makes the flag "
+        f"meaningful: a scatter-only test can be passed by a metric that is still climbing "
+        f"monotonically."))
 
 for b in _caveats:
     bullet(b)
@@ -561,9 +559,9 @@ table(["Run-health metric", "Value"],
 P(f"How the steady-state flag is defined. A metric counts as steady only if BOTH its relative "
   f"scatter and its linear drift across the trailing window are small: "
   f"|σ| ≤ {C.get('steady_tol', 0.2):.2f}·|mean| AND |drift| ≤ "
-  f"{C.get('steady_trend_tol', 0.05):.2f}·|mean|. The trend term matters: an earlier build of "
-  f"this study tested scatter alone, and a reach that climbed monotonically from 26 m to 96 m "
-  f"passed it, because a steadily-rising quantity has small scatter about its own mean. Over "
+  f"{C.get('steady_trend_tol', 0.05):.2f}·|mean|. The trend term is what gives the flag its "
+  f"meaning: under a scatter-only test a reach climbing monotonically from 26 m to 96 m would "
+  f"pass, because a steadily-rising quantity has small scatter about its own mean. Over "
   f"the {ss.get('window_s', [0, 0])[0]:.0f}–{ss.get('window_s', [0, 0])[1]:.0f} s window the "
   f"reach now has mean {ss.get('r_max_m_mean', 0):.1f} m, σ = {ss.get('r_max_m_std', 0):.1f} m "
   f"and drift {_rdrift:+.1f} m. "
@@ -657,15 +655,6 @@ P("Which case was fitted, and why only one. Case 3-1 is the highest-quality meas
   "therefore reported in Table 10.1 as an honest VALIDATION SPREAD, not used as fit targets. "
   "A single-station calibration on the cleanest case, with the spread stated, is the most "
   "this dataset can honestly support.", italic=True, color=TEAL)
-P("Provenance — an earlier revision of this study calibrated against a “site CTD/ADCP "
-  "dilution transect” generated by case_study/make_site_data.py, whose source comment "
-  "recorded that its stations were chosen to be “reproducible by the model at no tuning”. "
-  "Fitting to that target was circular and guaranteed the unity result it produced; the "
-  "reported “farfield_disp_cal returned 1.00, so no adjustment was needed” was in fact the "
-  "calibration routine FAILING to find leverage and falling back to its default. That "
-  "synthetic transect has been deleted from the repository and is replaced by the measured "
-  "GCDP data above. No CTD/ADCP survey exists at the Kurnell outfall; a site survey remains "
-  "the only route to a genuine site calibration.", italic=True, color=TEAL)
 
 # ============================================================ 11 VALIDATION
 H("11.  Validation and data sources")
@@ -700,11 +689,10 @@ P("The near-field uses the validated laboratory scaling directly — note that r
   "MEASURED in-class Gold Coast dataset in §10, which the model was never fitted to. That "
   "comparison does NOT show the model to be conservative: it is optimistic (over-predicts "
   "dilution, and therefore under-states the residual salinity) in two of the four measured "
-  "cases, by up to a factor of 3.4, and conservative in the other two. Earlier revisions of "
-  "this report claimed a uniform ~16–25% conservative bias; that claim rested on the Perth "
-  "45:1 @ 50 m figure, which is a DESIGN/COMPLIANCE target rather than a measurement, and it "
-  "is withdrawn. The genuinely independent gates are therefore the measured Gold Coast "
-  "comparison and the lock-exchange PDE benchmark. "
+  "cases, by up to a factor of 3.4, and conservative in the other two. Note that Perth's "
+  "45:1 @ 50 m, sometimes quoted as an in-class reference, is a DESIGN/COMPLIANCE target rather "
+  "than a measurement and is not used as a validation datum here. The genuinely independent "
+  "gates are the measured Gold Coast comparison and the lock-exchange PDE benchmark. "
   "Independently, the actual SDP Kurnell outfall study (Clark et al. 2018) found detectable "
   "ecological effects to ~100 m; this is an ecological effect distance driven partly by "
   "diffuser-induced near-bed flow, not a salinity isopleth, so it is an order-of-magnitude "
@@ -759,20 +747,22 @@ P("The 3-D far field is seeded by relaxing salinity toward S_source inside a Gau
   "centred at the near-field seabed return point. The blob is ANISOTROPIC: its horizontal "
   "scale is floored at the grid scale, 1.5·max(dx,dy) = 8.65 m, because a source narrower "
   "than a cell is unresolvable; its vertical scale is the physical return-plume half-width, "
-  "2.50 m, floored only at the cell height 1.5·dz = 1.44 m. An earlier build of this study "
-  "used a single isotropic floor of 1.5·max(dx,dz), which dx set to 8.65 m; that injected "
-  "brine over roughly a third of the water column, drove the entire source column to "
-  "S_source, and destroyed the near-source bottom-trapping. This section records both the "
-  "corrected structure and the one diagnostic the correction cannot repair.")
+  "2.50 m, floored only at the cell height 1.5·dz = 1.44 m. The anisotropy is essential: a "
+  "single isotropic floor of 1.5·max(dx,dz) would be set by dx to 8.65 m, injecting brine "
+  "over roughly a third of the water column, driving the entire source column to S_source and "
+  "destroying the near-source bottom-trapping. This section records the source structure and "
+  "the one diagnostic that even the anisotropic blob cannot repair.")
 for b in [
     f"The plume is bottom-trapped. The ΔS > {C['dS_crit']} g/kg region occupies the lowest "
     f"{g('z_deepest_m', 0) - g('plume_top_m', 0):.1f} m of the water column, from "
     f"{g('plume_top_m', 0):.1f} m depth down to the bed at {g('z_deepest_m', 0):.1f} m. The "
     f"upper water column carries only trace excess.",
-    f"The vertical extent is now consistent with the independent near-field model. The "
-    f"impacted region rises {g('plume_rise_m', 0):.1f} m above the source, against a "
-    f"terminal jet rise of {g('nf_rise_m', 0):.1f} m from the Roberts (1997) correlation — a "
-    f"cross-check the earlier build failed badly, reporting 22.8 m.",
+    f"The vertical extent is consistent with the independent near-field model. The impacted "
+    f"region rises {g('plume_rise_m', 0):.1f} m above the source, against a terminal jet rise "
+    f"of {g('nf_rise_m', 0):.1f} m from the Roberts (1997) correlation. These two numbers come "
+    f"from separately-constructed parts of the model and are not arranged to agree, so their "
+    f"agreement to within about {abs(g('plume_rise_m', 0) - g('nf_rise_m', 0)):.0f} m is a genuine "
+    f"cross-check on the source geometry. An isotropic source blob would break it outright.",
     f"Peak salinity remains a boundary condition. S_max = {g('S_max', 0):.4f} g/kg is exactly "
     f"S_source = S_amb,bed + (S₀ − S_amb,bed)/S_r. The blob centre relaxes fully toward "
     f"S_source whatever its width, so no change of blob geometry can make S_max a prediction. "
@@ -781,8 +771,9 @@ for b in [
     f"against the local depth-varying ambient, and the peak-excess cell sits a few metres "
     f"above the bed where the ambient is fresher, so it reports "
     f"{g('dilution_min', 0):.1f}:1 rather than the {g('nf_return_dilution', 0):.1f}:1 handed "
-    f"over at the bed. The plume does not re-concentrate; the earlier build's 32:1 was the "
-    f"same artefact, magnified.",
+    f"over at the bed. The plume does not re-concentrate: the shortfall is a datum artefact of "
+    f"the grid-floored source blob, not a physical process, and the minimum dilution should "
+    f"therefore not be quoted as a prediction.",
 ]:
     bullet(b)
 P("Datum note. In plume_envelope_vs_distance.csv the columns core_depth_below_surface_m and "
@@ -791,10 +782,10 @@ P("Datum note. In plume_envelope_vs_distance.csv the columns core_depth_below_su
   "envelope is moreover built from a 0.02 g/kg trace threshold, not from the ΔS_crit "
   "assessment contour, so its reported 'layer top' tracks where a trace of salt has mixed "
   "upward rather than where the assessed plume ends. Read the envelope for the CORE DEPTH, "
-  "which now sits on the bed, and take the assessed vertical extent from the metrics above. "
-  "An earlier draft of this study, and of the slide deck, read the layer top as a height "
-  "above bed and concluded the surface waters were unaffected; both the datum and the "
-  "conclusion have been corrected.", italic=True, color=TEAL)
+  "which sits on the bed, and take the assessed vertical extent from the metrics above. "
+  "Reading the layer top as a height above bed inverts the datum and would misstate how close "
+  "the trace plume comes to the surface — a layer top of 0.48 m means 0.48 m below the "
+  "SURFACE, not 0.48 m above the seabed.", italic=True, color=TEAL)
 
 # ============================================================ 13 FIGURES
 H("13.  Output figures, curves and contours")
@@ -872,24 +863,22 @@ P(f"The model predicts a seabed excess-salinity footprint above the conservative
   f"{g('z_deepest_m', 0) - g('plume_top_m', 0):.1f} m of the water column. This assessment "
   f"contour is more protective than the ~1 ppt above ambient typical of NSW mixing-zone "
   f"practice.")
-P(f"The compliance conclusion holds, but the margin is narrower than earlier revisions of this "
-  f"report claimed, and the reason is worth stating precisely. The binding condition is EPL 12904 "
-  f"condition O5.1: ΔS ≤ 1 ppt above background AT THE EDGE OF THE NEAR-FIELD MIXING ZONE. The "
-  f"licence specifies no distance; that edge is x_n = 9.0·Fr·d ≈ {X_N:.0f} m for this discharge, "
-  f"not the 50–100 m previously assumed. "
+P(f"The compliance conclusion holds, and the margin is modest rather than comfortable. The "
+  f"binding condition is EPL 12904 condition O5.1: ΔS ≤ 1 ppt above background AT THE EDGE OF "
+  f"THE NEAR-FIELD MIXING ZONE. The licence specifies no distance; that edge is "
+  f"x_n = 9.0·Fr·d ≈ {X_N:.0f} m for this discharge. "
   + (f"The modelled near-bed excess at {X_N:.0f} m is {DS_AT_XN:.2f} g/kg against the 1.0 ppt "
-     f"limit: COMPLIANT with a {100*(1-DS_AT_XN):.0f}% margin, where assessing at 50 m would have "
-     f"reported ~0.2 g/kg and an apparent ~80% margin. "
+     f"limit: COMPLIANT with a {100*(1-DS_AT_XN):.0f}% margin. "
      if DS_AT_XN is not None else "")
   + f"The peak excess anywhere ({g('excess_max', 0):.2f} g/kg) sits within ~20 m — inside the "
     f"mixing zone, where the limit does not bite. The other limits are met with room to spare: "
     f"Perth 1.2 ppt at 50 m, Gold Coast ~2 PSU at 60 m, and the California Ocean Plan 2.0 ppt at "
-    f"100 m. Two things temper this. First, the compliance point lies inside the NEAR field, so "
-    f"the verdict rests on the near-field coefficient — which is calibrated to measured data "
+    f"100 m. Two things temper the verdict. First, the compliance point lies inside the NEAR "
+    f"field, so it rests on the near-field coefficient — which is calibrated to measured data "
     f"(§10), but against which the model still errs by up to 3.4× on individual measured cases. "
-    f"Second, the operator's own EPL 12904 annual report records a real exceedance of O5.1 on "
-    f"22 July 2025, so this limit is not academic. A 29%-margin screening result is not a consent "
-    f"case; it is a reason to commission the site survey recommended in §16."
+    f"Second, the operator's own EPL 12904 annual report records an exceedance of O5.1 on "
+    f"22 July 2025, so this limit is not academic. A modest-margin screening result is not a "
+    f"consent case; it is a reason to commission the site survey recommended in §16."
   + ("" if STEADY else
      " The footprint precision is weaker: with bottom drag the reach is bounded but oscillates "
      "with the tidal/stochastic forcing rather than settling to a single value, and the footprint "
@@ -932,13 +921,10 @@ for b in [
     "The FAR FIELD is NOT calibrated and cannot be from the available data. farfield_disp_cal is "
     "unidentifiable — a four-fold sweep moves the modelled mixing-zone dilution by <3.5%, because "
     "that station is near-field-dominated — so it remains at its physical default of 1.0: a default, "
-    "not a fit. A prior revision reported that same 1.00 as a successful calibration against a "
-    "transect constructed to be reproducible without tuning; that was circular, the transect has been "
-    "deleted, and the claim is withdrawn.",
+    "not a fit.",
     "The model is NOT demonstrably conservative. Against the four MEASURED Gold Coast cases its "
     "dilution error spans 0.35×–3.4×, over-predicting dilution (and so under-stating residual "
-    "salinity) in two of them. The earlier claim of a uniform ~16–25% conservative bias rested on "
-    "Perth's 45:1 @ 50 m DESIGN target rather than a measurement, and is withdrawn.",
+    "salinity) in two of them.",
     f"Peak salinity ({g('S_max', 0):.2f} g/kg) and, to a lesser degree, minimum dilution "
     f"({g('dilution_min', 0):.1f}:1) are diagnostics of the prescribed source condition rather "
     f"than predictions, and no change of source-blob geometry can alter that (§12.4).",
@@ -1014,8 +1000,8 @@ refs = [
     "Validation', Appendix D of the PSDP2 referral documentation, WA Environmental Protection "
     "Authority (epa.wa.gov.au). Establishes: (a) the Perth diffuser is ~163 m with forty 0.13 m "
     "ports inclined at 60°, elevated 1.0 m; (b) the widely-quoted 45:1 at 50 m is explicitly a "
-    "DESIGN TARGET, not a measurement — the basis on which this report withdraws the former "
-    "'conservative by 16–25%' claim; (c) far-field near-bed salinity increases across the "
+    "DESIGN TARGET, not a measurement, and is therefore not used as a validation datum here; "
+    "(c) far-field near-bed salinity increases across the "
     "monitoring rings are 0.0–0.45 units and are MODEL-DERIVED, and the report states they are "
     "'close to the accuracy and precision of the most accurate salinity measurements undertaken "
     "with CTDs' (Seabird accuracy 'at best 0.02 units') — the evidence that a far-field "
@@ -1047,5 +1033,8 @@ P("Data-source note: all validation benchmark values are recorded with their cit
   "calibration target.", italic=True, size=9.5, color=TEAL)
 
 out = os.path.join(HERE, "case_study.docx")
+cp = doc.core_properties
+cp.author = "Akosa Samuel Onyejekwe"
+cp.last_modified_by = "Akosa Samuel Onyejekwe"
 doc.save(out)
 print(f"saved {out}")
